@@ -1,0 +1,715 @@
+# =============================================================================
+# LogSentinel — GitHub Actions CI/CD Pipeline
+# =============================================================================
+# Triggers:
+#   - push to main branch
+#   - pull_request targeting main branch
+#
+# Jobs:
+#   1. lint-and-test   → flake8, black, isort, bandit, pytest + coverage
+#   2. build-and-push  → Docker build + push to Docker Hub (on main only)
+#   3. deploy          → kubectl apply / helm upgrade (on main only)
+# =============================================================================
+
+name: LogSentinel CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+# Cancel in-progress runs for the same branch to save resources
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# Global environment variables
+# ---------------------------------------------------------------------------
+env:
+  PYTHON_VERSION: "3.11"
+  DOCKER_REGISTRY: docker.io
+  IMAGE_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}/logsentinel
+  # All services to build Docker images for
+  SERVICES: "log-ingestion-api log-processor ml-engine alert-service dashboard-backend"
+  K8S_NAMESPACE: logsentinel
+  HELM_RELEASE: logsentinel
+  HELM_CHART_PATH: infra/helm/logsentinel
+
+# ---------------------------------------------------------------------------
+# Permissions
+# ---------------------------------------------------------------------------
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+# =============================================================================
+# JOB 1 — Lint & Test
+# =============================================================================
+jobs:
+  lint-and-test:
+    name: "Lint & Test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for SonarQube / coverage diff
+
+      # -----------------------------------------------------------------------
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install \
+            flake8==6.1.0 \
+            black==23.11.0 \
+            isort==5.12.0 \
+            bandit==1.7.6 \
+            pytest==7.4.3 \
+            pytest-asyncio==0.21.1 \
+            pytest-cov==4.1.0 \
+            pytest-mock==3.12.0 \
+            httpx==0.25.2 \
+            anyio==4.1.0
+
+      # -----------------------------------------------------------------------
+      - name: "Lint: black (format check)"
+        run: |
+          echo "::group::black format check"
+          black --check --diff \
+            services/ \
+            ml/ \
+            tests/ \
+            --line-length=100 \
+            --target-version=py311
+          echo "::endgroup::"
+
+      # -----------------------------------------------------------------------
+      - name: "Lint: isort (import sort check)"
+        run: |
+          echo "::group::isort check"
+          isort --check-only --diff \
+            services/ \
+            ml/ \
+            tests/ \
+            --profile=black \
+            --line-length=100
+          echo "::endgroup::"
+
+      # -----------------------------------------------------------------------
+      - name: "Lint: flake8"
+        run: |
+          echo "::group::flake8"
+          flake8 services/ ml/ tests/ \
+            --max-line-length=100 \
+            --exclude=__pycache__,.venv,migrations,*.egg-info \
+            --ignore=E203,W503,W504 \
+            --statistics \
+            --count
+          echo "::endgroup::"
+
+      # -----------------------------------------------------------------------
+      - name: "Security: bandit (SAST)"
+        run: |
+          echo "::group::bandit security scan"
+          bandit \
+            -r services/ ml/ \
+            -ll \
+            -ii \
+            --exclude "tests/,__pycache__" \
+            -f txt
+          echo "::endgroup::"
+        # Only fail on HIGH severity + HIGH confidence; warnings are informational
+        continue-on-error: false
+
+      # -----------------------------------------------------------------------
+      - name: "Test: pytest unit tests"
+        run: |
+          echo "::group::pytest unit tests"
+          pytest tests/unit/ \
+            -v \
+            --tb=short \
+            --cov=services \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --cov-fail-under=70 \
+            --junit-xml=test-results/unit-results.xml \
+            -m "not integration and not load" \
+            --asyncio-mode=auto
+          echo "::endgroup::"
+
+      # -----------------------------------------------------------------------
+      - name: "Upload test results"
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            test-results/
+            coverage.xml
+            htmlcov/
+          retention-days: 14
+
+      # -----------------------------------------------------------------------
+      - name: "Upload coverage to Codecov"
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: coverage.xml
+          flags: unittests
+          name: logsentinel-coverage
+          fail_ci_if_error: false
+
+      # -----------------------------------------------------------------------
+      - name: "Publish test results to PR"
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && github.event_name == 'pull_request'
+        with:
+          files: test-results/unit-results.xml
+          comment_title: "Unit Test Results"
+          fail_on: "test failures"
+
+  # =============================================================================
+  # JOB 2 — Build & Push Docker Images
+  # Runs only on push to main (not on PRs — saves registry storage and build time)
+  # =============================================================================
+  build-and-push:
+    name: "Build & Push Docker Images"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        service:
+          - log-ingestion-api
+          - log-processor
+          - ml-engine
+          - alert-service
+          - dashboard-backend
+      fail-fast: false   # build all services even if one fails
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          driver-opts: |
+            network=host
+            image=moby/buildkit:latest
+
+      # -----------------------------------------------------------------------
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      - name: "Compute image metadata"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            # Tag with short commit SHA (always)
+            type=sha,prefix=sha-,format=short
+            # Tag with full commit SHA
+            type=sha,prefix=,format=long
+            # Tag 'latest' on main branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Tag with branch name
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.title=LogSentinel ${{ matrix.service }}
+            org.opencontainers.image.description=LogSentinel microservice: ${{ matrix.service }}
+            org.opencontainers.image.vendor=LogSentinel Team
+            org.opencontainers.image.revision=${{ github.sha }}
+            logsentinel.service=${{ matrix.service }}
+            logsentinel.build.run-id=${{ github.run_id }}
+
+      # -----------------------------------------------------------------------
+      - name: "Build and push: ${{ matrix.service }}"
+        uses: docker/build-push-action@v5
+        with:
+          context: services/${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
+          target: runtime
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_COMMIT=${{ github.sha }}
+            GIT_BRANCH=${{ github.ref_name }}
+          platforms: linux/amd64
+
+      # -----------------------------------------------------------------------
+      - name: "Export image digest"
+        run: |
+          echo "IMAGE=${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:sha-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "Built and pushed: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}"
+          echo "Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+
+  # =============================================================================
+  # JOB 2b — Train and push ML model (runs in parallel with image builds)
+  # Only rebuilds if ml/ directory changed
+  # =============================================================================
+  train-ml-model:
+    name: "Train ML Model"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint-and-test
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: Check if ML files changed
+        id: ml-changed
+        uses: tj-actions/changed-files@v40
+        with:
+          files: |
+            ml/**
+            services/ml-engine/**
+
+      # -----------------------------------------------------------------------
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: steps.ml-changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      # -----------------------------------------------------------------------
+      - name: Install ML dependencies
+        if: steps.ml-changed.outputs.any_changed == 'true'
+        run: |
+          pip install --upgrade pip
+          pip install scikit-learn==1.3.2 pandas==2.1.3 numpy==1.26.2 joblib==1.3.2
+
+      # -----------------------------------------------------------------------
+      - name: Train Isolation Forest model
+        if: steps.ml-changed.outputs.any_changed == 'true'
+        run: |
+          echo "Training ML model..."
+          python ml/train.py \
+            --n-normal 47500 \
+            --n-anomaly 2500 \
+            --n-estimators 100 \
+            --contamination 0.05 \
+            --random-state 42
+          echo "Model training complete"
+          ls -lh ml/models/
+
+      # -----------------------------------------------------------------------
+      - name: Upload model artifacts
+        if: steps.ml-changed.outputs.any_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-models-${{ github.run_id }}
+          path: |
+            ml/models/isolation_forest.joblib
+            ml/models/scaler.joblib
+            ml/models/training_metadata.json
+          retention-days: 30
+
+      # -----------------------------------------------------------------------
+      - name: Configure AWS credentials (for S3 model upload)
+        if: |
+          steps.ml-changed.outputs.any_changed == 'true' &&
+          secrets.AWS_ACCESS_KEY_ID != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      # -----------------------------------------------------------------------
+      - name: Upload model to S3
+        if: |
+          steps.ml-changed.outputs.any_changed == 'true' &&
+          secrets.AWS_S3_BUCKET != ''
+        run: |
+          aws s3 cp ml/models/isolation_forest.joblib \
+            s3://${{ secrets.AWS_S3_BUCKET }}/models/isolation_forest.joblib \
+            --sse aws:kms
+          aws s3 cp ml/models/scaler.joblib \
+            s3://${{ secrets.AWS_S3_BUCKET }}/models/scaler.joblib \
+            --sse aws:kms
+          aws s3 cp ml/models/training_metadata.json \
+            s3://${{ secrets.AWS_S3_BUCKET }}/models/training_metadata.json
+          echo "Model artifacts uploaded to S3"
+
+      - name: Skip (no ML changes)
+        if: steps.ml-changed.outputs.any_changed != 'true'
+        run: echo "No ML changes detected — skipping model training"
+
+  # =============================================================================
+  # JOB 3 — Deploy to Kubernetes
+  # Runs after all images are built and pushed
+  # =============================================================================
+  deploy:
+    name: "Deploy to Kubernetes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.logsentinel.example.com
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: "Compute image tag"
+        id: tag
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "IMAGE_TAG=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Image tag: sha-${SHORT_SHA}"
+
+      # -----------------------------------------------------------------------
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG_DATA }}
+
+      # -----------------------------------------------------------------------
+      - name: Verify cluster connection
+        run: |
+          kubectl version --client
+          kubectl cluster-info
+          kubectl get nodes
+
+      # -----------------------------------------------------------------------
+      - name: "Set up Helm"
+        uses: azure/setup-helm@v3
+        with:
+          version: "3.13.2"
+
+      # -----------------------------------------------------------------------
+      - name: "Create namespace (if not exists)"
+        run: |
+          kubectl create namespace ${{ env.K8S_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # -----------------------------------------------------------------------
+      - name: "Apply Kubernetes Secrets"
+        run: |
+          # Create/update secrets from GitHub Secrets
+          # Using kubectl create secret with --dry-run=client | apply pattern
+          # so secrets are updated if they already exist
+
+          kubectl create secret generic logsentinel-app-secrets \
+            --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+            --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
+            --from-literal=SLACK_WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}" \
+            --from-literal=SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}" \
+            --from-literal=ELASTICSEARCH_PASSWORD="${{ secrets.ELASTICSEARCH_PASSWORD }}" \
+            --namespace=${{ env.K8S_NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "Secrets applied"
+
+      # -----------------------------------------------------------------------
+      - name: "Apply ConfigMaps"
+        run: |
+          kubectl apply -f infra/kubernetes/configmaps/ \
+            --namespace=${{ env.K8S_NAMESPACE }}
+          echo "ConfigMaps applied"
+
+      # -----------------------------------------------------------------------
+      - name: "Deploy via Helm upgrade"
+        run: |
+          SHORT_SHA="${{ steps.tag.outputs.SHORT_SHA }}"
+          IMAGE_TAG="${{ steps.tag.outputs.IMAGE_TAG }}"
+          REGISTRY_PREFIX="${{ env.IMAGE_PREFIX }}"
+
+          helm upgrade --install ${{ env.HELM_RELEASE }} \
+            ${{ env.HELM_CHART_PATH }} \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --create-namespace \
+            --values ${{ env.HELM_CHART_PATH }}/values.yaml \
+            --set "global.imageTag=${IMAGE_TAG}" \
+            --set "global.imageRegistry=${REGISTRY_PREFIX}" \
+            --set "logIngestionApi.image.tag=${IMAGE_TAG}" \
+            --set "logProcessor.image.tag=${IMAGE_TAG}" \
+            --set "mlEngine.image.tag=${IMAGE_TAG}" \
+            --set "alertService.image.tag=${IMAGE_TAG}" \
+            --set "dashboardBackend.image.tag=${IMAGE_TAG}" \
+            --set "global.environment=production" \
+            --atomic \
+            --timeout 8m \
+            --wait \
+            --wait-for-jobs \
+            --history-max 5
+
+          echo "Helm deployment complete"
+
+      # -----------------------------------------------------------------------
+      - name: "Verify rollout"
+        run: |
+          echo "Checking rollout status for all deployments..."
+          DEPLOYMENTS=(
+            "log-ingestion-api"
+            "log-processor"
+            "ml-engine"
+            "alert-service"
+            "dashboard-backend"
+          )
+
+          ALL_OK=true
+          for deployment in "${DEPLOYMENTS[@]}"; do
+            echo "Checking: $deployment"
+            if kubectl rollout status deployment/${deployment} \
+                --namespace=${{ env.K8S_NAMESPACE }} \
+                --timeout=3m; then
+              echo "  ✔ ${deployment} rolled out successfully"
+            else
+              echo "  ✘ ${deployment} rollout failed or timed out"
+              ALL_OK=false
+            fi
+          done
+
+          if [ "$ALL_OK" = "false" ]; then
+            echo "One or more deployments failed to roll out"
+            kubectl get pods --namespace=${{ env.K8S_NAMESPACE }} -o wide
+            exit 1
+          fi
+
+          echo "All deployments rolled out successfully"
+
+      # -----------------------------------------------------------------------
+      - name: "Health check — post deploy"
+        run: |
+          echo "Running post-deployment health checks..."
+
+          # Wait a moment for services to stabilise
+          sleep 15
+
+          # Check pod status
+          kubectl get pods \
+            --namespace=${{ env.K8S_NAMESPACE }} \
+            --field-selector=status.phase!=Running \
+            -o wide || true
+
+          # Verify all pods are Running
+          NOT_RUNNING=$(kubectl get pods \
+            --namespace=${{ env.K8S_NAMESPACE }} \
+            --field-selector=status.phase!=Running \
+            --no-headers 2>/dev/null | wc -l)
+
+          if [ "$NOT_RUNNING" -gt "0" ]; then
+            echo "WARNING: $NOT_RUNNING pods are not in Running state"
+            kubectl get pods --namespace=${{ env.K8S_NAMESPACE }} -o wide
+          else
+            echo "All pods are running"
+          fi
+
+          # Show final pod status
+          kubectl get pods --namespace=${{ env.K8S_NAMESPACE }} -o wide
+          kubectl get services --namespace=${{ env.K8S_NAMESPACE }}
+          kubectl get hpa --namespace=${{ env.K8S_NAMESPACE }}
+
+      # -----------------------------------------------------------------------
+      - name: "Post deployment summary to PR / commit"
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | production |" >> $GITHUB_STEP_SUMMARY
+          echo "| Namespace | ${{ env.K8S_NAMESPACE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Tag | ${{ steps.tag.outputs.IMAGE_TAG }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u '+%Y-%m-%dT%H:%M:%SZ') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for svc in ${{ env.SERVICES }}; do
+            echo "- \`${{ env.IMAGE_PREFIX }}-${svc}:${{ steps.tag.outputs.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          done
+
+      # -----------------------------------------------------------------------
+      - name: "Rollback on failure"
+        if: failure()
+        run: |
+          echo "Deployment failed — initiating Helm rollback"
+          helm rollback ${{ env.HELM_RELEASE }} \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --wait \
+            --timeout 5m || echo "Rollback also failed — manual intervention required"
+          echo "Rollback complete"
+
+  # =============================================================================
+  # JOB 4 — Integration Tests (optional, runs on push to main only)
+  # Uses Testcontainers to spin up real Kafka, Elasticsearch, Redis
+  # =============================================================================
+  integration-tests:
+    name: "Integration Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    services:
+      # Kafka for integration tests
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.5.3
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+        options: >-
+          --health-cmd "echo ruok | nc localhost 2181 | grep imok"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+
+      kafka:
+        image: confluentinc/cp-kafka:7.5.3
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        options: >-
+          --health-cmd "kafka-broker-api-versions --bootstrap-server localhost:9092"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 60s
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: "-Xms256m -Xmx256m"
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -sf http://localhost:9200/_cluster/health"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 60s
+
+      redis:
+        image: redis:7.2-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      postgres:
+        image: postgres:15.5-alpine
+        env:
+          POSTGRES_DB: logsentinel_test
+          POSTGRES_USER: logsentinel
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd "pg_isready -U logsentinel"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # -----------------------------------------------------------------------
+      - name: "Train ML model for integration tests"
+        run: |
+          python ml/train.py --n-normal 5000 --n-anomaly 250 --skip-eval
+          ls -lh ml/models/
+
+      # -----------------------------------------------------------------------
+      - name: "Run integration tests"
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+          ELASTICSEARCH_HOST: localhost
+          ELASTICSEARCH_PORT: 9200
+          REDIS_URL: redis://localhost:6379/0
+          DATABASE_URL: postgresql+asyncpg://logsentinel:testpass@localhost:5432/logsentinel_test
+          ML_MODEL_PATH: ml/models/isolation_forest.joblib
+          ML_SCALER_PATH: ml/models/scaler.joblib
+          ENVIRONMENT: test
+          SLACK_ENABLED: "false"
+          SMTP_ENABLED: "false"
+        run: |
+          pytest tests/integration/ \
+            -v \
+            --tb=short \
+            --junit-xml=test-results/integration-results.xml \
+            -m "integration" \
+            --asyncio-mode=auto \
+            --timeout=120
+
+      # -----------------------------------------------------------------------
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results-${{ github.run_id }}
+          path: test-results/integration-results.xml
+          retention-days: 7
