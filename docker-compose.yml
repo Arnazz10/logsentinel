@@ -234,7 +234,7 @@ services:
     networks:
       - logsentinel-net
     ports:
-      - "8080:8080"
+      - "8090:8080"
     logging: *default-logging
 
   # ---------------------------------------------------------------------------
@@ -572,7 +572,7 @@ services:
       GF_USERS_DEFAULT_THEME: dark
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/logsentinel-overview.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/logsentinel.json
       GF_SERVER_ROOT_URL: http://localhost:3000
       GF_LOG_LEVEL: warn
     volumes:

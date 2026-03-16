@@ -205,10 +205,6 @@ class KafkaProducerClient:
                 request_timeout_ms=self._request_timeout_ms,
                 retry_backoff_ms=self._retry_backoff_ms,
                 enable_idempotence=self._enable_idempotence,
-                # Retry sending on transient broker errors
-                max_in_flight_requests_per_connection=5
-                if not self._enable_idempotence
-                else 1,
             )
 
             try:
