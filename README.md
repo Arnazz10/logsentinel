@@ -154,7 +154,7 @@ This starts:
 - All 5 microservices
 - Prometheus + Grafana + Alertmanager
 
-### 4. Verify services are healthy
+### 4. Verify services are healthy:
 
 ```bash
 make health
