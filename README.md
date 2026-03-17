@@ -12,7 +12,7 @@
 
 ## 📖 Overview
 
-**LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards.
+**LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards
 
 Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastructure, with a full DevOps CI/CD pipeline powered by GitHub Actions.
 
