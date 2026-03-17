@@ -142,7 +142,7 @@ cp .env.example .env
 # Edit .env with your Slack webhook, SMTP credentials, etc.
 ```
 
-### 3. Start all services
+### 3. Start all services:
 
 ```bash
 make up
