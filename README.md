@@ -1,4 +1,4 @@
-# 🛡️ LogSentinel — Cloud-Native AI Log Monitoring & Anomaly Detection Platform
+# 🛡️ LogSentinel — Cloud-Native AI Log Monitoring & Anomaly Detection Platform :
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?logo=fastapi)
