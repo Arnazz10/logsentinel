@@ -29,8 +29,7 @@ RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | b
 # Create symlink for python3 as python
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Add jenkins user to docker group (host gid might vary, but this is a common approach)
-RUN groupadd -g 999 docker_host || true
-RUN usermod -aG docker jenkins
+# Add jenkins user to docker group
+RUN groupadd -g 999 docker && usermod -aG docker jenkins
 
 USER jenkins
