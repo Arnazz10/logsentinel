@@ -124,7 +124,9 @@ class LogSentinelJsonFormatter(jsonlogger.JsonFormatter):
             log_record["location"] = f"{record.pathname}:{record.lineno}"
             log_record["function"] = record.funcName
 
-    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
+    def formatTime(
+        self, record: logging.LogRecord, datefmt: str | None = None
+    ) -> str:  # noqa: N802
         """
         Format the log record timestamp as ISO 8601 UTC with milliseconds.
         Example: '2024-01-15T03:22:14.512Z'

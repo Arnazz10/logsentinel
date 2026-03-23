@@ -49,7 +49,14 @@ FEATURE_COLUMNS = [
     "service_id_encoded",
 ]
 
-LOG_LEVEL_MAP = {"DEBUG": 0, "INFO": 1, "WARN": 2, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
+LOG_LEVEL_MAP = {
+    "DEBUG": 0,
+    "INFO": 1,
+    "WARN": 2,
+    "WARNING": 2,
+    "ERROR": 3,
+    "CRITICAL": 4,
+}
 SERVICE_MAP = {
     "auth-service": 0,
     "payment-service": 1,
@@ -60,7 +67,9 @@ SERVICE_MAP = {
 }
 
 
-def generate_evaluation_dataset(n_normal: int = 1500, n_anomalous: int = 150, seed: int = 99) -> pd.DataFrame:
+def generate_evaluation_dataset(
+    n_normal: int = 1500, n_anomalous: int = 150, seed: int = 99
+) -> pd.DataFrame:
     """Generate synthetic evaluation data with known labels for metric computation."""
     rng = np.random.default_rng(seed)
 
@@ -68,7 +77,9 @@ def generate_evaluation_dataset(n_normal: int = 1500, n_anomalous: int = 150, se
     normal = {
         "hour_of_day": rng.integers(0, 24, n_normal),
         "response_time_ms": rng.normal(180, 40, n_normal).clip(10, 500),
-        "error_code": rng.choice([0, 200, 201, 302], n_normal, p=[0.6, 0.25, 0.08, 0.07]),
+        "error_code": rng.choice(
+            [0, 200, 201, 302], n_normal, p=[0.6, 0.25, 0.08, 0.07]
+        ),
         "log_level_encoded": rng.choice([0, 1, 2], n_normal, p=[0.1, 0.8, 0.1]),
         "request_count_last_60s": rng.integers(5, 80, n_normal),
         "service_id_encoded": rng.integers(0, 5, n_normal),
@@ -90,9 +101,7 @@ def generate_evaluation_dataset(n_normal: int = 1500, n_anomalous: int = 150, se
 
     df_normal = pd.DataFrame(normal)
     df_anomalous = pd.DataFrame(anomalous)
-    df_anomalous["response_time_ms"] = (
-        rng.uniform(1800, 8000, n_anomalous)
-    )
+    df_anomalous["response_time_ms"] = rng.uniform(1800, 8000, n_anomalous)
 
     df = pd.concat([df_normal, df_anomalous], ignore_index=True)
     df = df.sample(frac=1, random_state=seed).reset_index(drop=True)
@@ -139,7 +148,9 @@ def evaluate(
         logger.info("Loading evaluation data", extra={"path": data_path})
         df = pd.read_csv(data_path)
         if "true_label" not in df.columns:
-            raise ValueError("CSV must contain 'true_label' column (-1=anomaly, 1=normal)")
+            raise ValueError(
+                "CSV must contain 'true_label' column (-1=anomaly, 1=normal)"
+            )
     else:
         logger.info("Using synthetic evaluation dataset")
         df = generate_evaluation_dataset()
@@ -163,7 +174,7 @@ def evaluate(
 
     # ── Predict ───────────────────────────────────────────────────────────────
     logger.info("Running model inference...")
-    y_pred = model.predict(X)           # -1 = anomaly, 1 = normal
+    y_pred = model.predict(X)  # -1 = anomaly, 1 = normal
     y_scores = model.decision_function(X)  # lower = more anomalous
 
     # ── Metrics ───────────────────────────────────────────────────────────────
@@ -176,10 +187,14 @@ def evaluate(
     f1 = f1_score(y_true_binary, y_pred_binary, zero_division=0)
 
     try:
-        roc_auc = roc_auc_score(y_true_binary, -y_scores)  # invert: lower score = more anomalous
+        roc_auc = roc_auc_score(
+            y_true_binary, -y_scores
+        )  # invert: lower score = more anomalous
     except ValueError:
         roc_auc = None
-        logger.warning("ROC AUC could not be computed (possibly single class in labels)")
+        logger.warning(
+            "ROC AUC could not be computed (possibly single class in labels)"
+        )
 
     cm = confusion_matrix(y_true_binary, y_pred_binary)
     tn, fp, fn, tp = cm.ravel() if cm.shape == (2, 2) else (0, 0, 0, 0)

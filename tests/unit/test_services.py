@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def sample_log_entry():
     return {
@@ -45,12 +46,14 @@ def sample_normal_log():
 
 # ─── Model Validation Tests ───────────────────────────────────────────────────
 
+
 class TestLogEntryModel:
     """Tests for LogEntry Pydantic model validation."""
 
     def test_valid_log_entry(self, sample_log_entry):
         """Valid log entry should parse without errors."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
 
@@ -62,6 +65,7 @@ class TestLogEntryModel:
     def test_missing_required_fields(self):
         """Missing required fields should raise ValidationError."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
@@ -72,6 +76,7 @@ class TestLogEntryModel:
     def test_log_level_case_insensitive(self, sample_log_entry):
         """Log level should be normalised to uppercase."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
 
@@ -82,6 +87,7 @@ class TestLogEntryModel:
     def test_response_time_defaults_to_zero(self, sample_log_entry):
         """response_time_ms should default gracefully."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
 
@@ -92,6 +98,7 @@ class TestLogEntryModel:
     def test_negative_response_time_rejected(self, sample_log_entry):
         """Negative response_time_ms should be rejected."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
@@ -103,6 +110,7 @@ class TestLogEntryModel:
     def test_invalid_log_level_rejected(self, sample_log_entry):
         """Invalid log level should be rejected."""
         import sys
+
         sys.path.insert(0, "services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
@@ -114,12 +122,14 @@ class TestLogEntryModel:
 
 # ─── Feature Extractor Tests ──────────────────────────────────────────────────
 
+
 class TestFeatureExtractor:
     """Tests for feature engineering from raw log entries."""
 
     def test_extract_hour_of_day(self):
         """hour_of_day should be correctly extracted from ISO timestamp."""
         import sys
+
         sys.path.insert(0, "services/log-processor")
         from app.feature_extractor import extract_features
 
@@ -137,10 +147,18 @@ class TestFeatureExtractor:
     def test_log_level_encoding(self):
         """Log levels should be encoded to correct integers."""
         import sys
+
         sys.path.insert(0, "services/log-processor")
         from app.feature_extractor import extract_features
 
-        expected = {"DEBUG": 0, "INFO": 1, "WARN": 2, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
+        expected = {
+            "DEBUG": 0,
+            "INFO": 1,
+            "WARN": 2,
+            "WARNING": 2,
+            "ERROR": 3,
+            "CRITICAL": 4,
+        }
         for level_str, expected_int in expected.items():
             log = {
                 "timestamp": "2024-01-01T12:00:00Z",
@@ -151,11 +169,14 @@ class TestFeatureExtractor:
                 "request_count_last_60s": 5,
             }
             features = extract_features(log)
-            assert features["log_level_encoded"] == expected_int, f"Failed for level {level_str}"
+            assert (
+                features["log_level_encoded"] == expected_int
+            ), f"Failed for level {level_str}"
 
     def test_missing_fields_use_defaults(self):
         """Missing optional fields should use sensible defaults."""
         import sys
+
         sys.path.insert(0, "services/log-processor")
         from app.feature_extractor import extract_features
 
@@ -167,6 +188,7 @@ class TestFeatureExtractor:
 
 
 # ─── Anomaly Detection Tests ──────────────────────────────────────────────────
+
 
 class TestAnomalyDetection:
     """Tests for Isolation Forest model predictions."""
@@ -184,6 +206,7 @@ class TestAnomalyDetection:
 
         model_path = tmp_path / "test_model.joblib"
         import joblib
+
         joblib.dump(model, model_path)
         return str(model_path)
 
@@ -191,6 +214,7 @@ class TestAnomalyDetection:
         """Normal log features should be predicted as normal (1)."""
         import numpy as np
         import joblib
+
         model = joblib.load(trained_model)
         X_normal = np.array([[12, 150.0, 200, 1, 20, 1]])
         prediction = model.predict(X_normal)
@@ -204,6 +228,7 @@ class TestAnomalyDetection:
         """Anomalous features should have lower anomaly score than normal."""
         import numpy as np
         import joblib
+
         model = joblib.load(trained_model)
 
         X_normal = np.array([[12, 150.0, 200, 1, 20, 1]])
@@ -216,12 +241,14 @@ class TestAnomalyDetection:
 
 # ─── Alert Deduplication Tests ────────────────────────────────────────────────
 
+
 class TestAlertDeduplication:
     """Tests for Redis-based alert deduplication."""
 
     def test_dedup_key_is_consistent(self):
         """Two identical alerts should produce the same dedup key."""
         import sys
+
         sys.path.insert(0, "services/alert-service")
         from app.deduplicator import AlertDeduplicator
 
@@ -234,6 +261,7 @@ class TestAlertDeduplication:
     def test_different_services_produce_different_keys(self):
         """Alerts from different services should have different dedup keys."""
         import sys
+
         sys.path.insert(0, "services/alert-service")
         from app.deduplicator import AlertDeduplicator
 
@@ -245,12 +273,14 @@ class TestAlertDeduplication:
 
 # ─── Dashboard Stats Tests ────────────────────────────────────────────────────
 
+
 class TestDashboardHelpers:
     """Tests for dashboard backend helper functions."""
 
     def test_serialise_alert_converts_datetime(self):
         """_serialise_alert should convert datetime objects to ISO strings."""
         import sys
+
         sys.path.insert(0, "services/dashboard-backend")
         from main import _serialise_alert
 
@@ -266,6 +296,7 @@ class TestDashboardHelpers:
     def test_serialise_alert_passthrough_scalars(self):
         """Non-datetime fields should pass through unchanged."""
         import sys
+
         sys.path.insert(0, "services/dashboard-backend")
         from main import _serialise_alert
 

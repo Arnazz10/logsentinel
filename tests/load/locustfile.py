@@ -25,7 +25,13 @@ from locust import HttpUser, TaskSet, between, constant_pacing, task
 
 # ─── Shared data generation ───────────────────────────────────────────────────
 
-SERVICES = ["auth-service", "user-service", "payment-service", "order-service", "api-gateway"]
+SERVICES = [
+    "auth-service",
+    "user-service",
+    "payment-service",
+    "order-service",
+    "api-gateway",
+]
 LOG_LEVELS = ["DEBUG", "INFO", "INFO", "INFO", "WARN", "ERROR", "CRITICAL"]
 ERROR_CODES = [200, 200, 200, 201, 302, 400, 401, 403, 404, 500, 503]
 MESSAGES = [
@@ -49,7 +55,9 @@ def random_log_payload() -> dict:
     service = random.choice(SERVICES)
     level = random.choice(["ERROR", "CRITICAL"] if is_anomaly else LOG_LEVELS)
     response_time = random.uniform(2000, 9000) if is_anomaly else random.gauss(180, 50)
-    error_code = random.choice([500, 503]) if is_anomaly else random.choice(ERROR_CODES[:8])
+    error_code = (
+        random.choice([500, 503]) if is_anomaly else random.choice(ERROR_CODES[:8])
+    )
     request_count = random.randint(200, 800) if is_anomaly else random.randint(1, 80)
 
     return {
@@ -69,6 +77,7 @@ def random_batch_payload(size: int = 10) -> dict:
 
 
 # ─── Ingestion API Tasks ───────────────────────────────────────────────────────
+
 
 class IngestionTasks(TaskSet):
     """Tasks targeting the Log Ingestion API."""
@@ -142,7 +151,9 @@ class DashboardTasks(TaskSet):
 
     @task(3)
     def get_anomalies(self):
-        self.client.get("/anomalies", params={"page": 1, "size": 20}, name="GET /anomalies")
+        self.client.get(
+            "/anomalies", params={"page": 1, "size": 20}, name="GET /anomalies"
+        )
 
     @task(2)
     def get_stats(self):
@@ -156,11 +167,13 @@ class DashboardTasks(TaskSet):
 
 # ─── User classes ──────────────────────────────────────────────────────────────
 
+
 class IngestionApiUser(HttpUser):
     """
     Simulates application services pushing logs to the Ingestion API.
     High concurrency, frequent requests.
     """
+
     tasks = [IngestionTasks]
     wait_time = between(0.1, 0.5)  # 2–10 requests/second per user
     host = "http://localhost:8000"
@@ -171,6 +184,7 @@ class DashboardApiUser(HttpUser):
     Simulates dashboard viewers querying log statistics.
     Lower frequency, read-heavy.
     """
+
     tasks = [DashboardTasks]
     wait_time = between(1, 5)
     host = "http://localhost:8002"

@@ -82,7 +82,9 @@ class LogSentinelJsonFormatter(jsonlogger.JsonFormatter):
             log_record["location"] = f"{record.pathname}:{record.lineno}"
             log_record["function"] = record.funcName
 
-    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
+    def formatTime(
+        self, record: logging.LogRecord, datefmt: str | None = None
+    ) -> str:  # noqa: N802
         from datetime import datetime, timezone
 
         dt = datetime.fromtimestamp(record.created, tz=timezone.utc)

@@ -30,6 +30,7 @@ skip_if_no_live = pytest.mark.skipif(not LIVE_SERVICES, reason="Requires live se
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def log_payload():
     return {
@@ -57,6 +58,7 @@ def predict_payload():
 
 
 # ─── Log Ingestion API Tests ───────────────────────────────────────────────────
+
 
 class TestIngestionAPIContract:
     """Contract/shape tests for the ingestion API (no live service needed)."""
@@ -152,12 +154,14 @@ class TestMLEngineLive:
     @skip_if_no_live
     def test_anomalous_features_detected(self, predict_payload):
         """Extremely anomalous features should return -1 prediction."""
-        predict_payload.update({
-            "response_time_ms": 50000.0,
-            "error_code": 503,
-            "log_level_encoded": 4,
-            "request_count_last_60s": 1000,
-        })
+        predict_payload.update(
+            {
+                "response_time_ms": 50000.0,
+                "error_code": 503,
+                "log_level_encoded": 4,
+                "request_count_last_60s": 1000,
+            }
+        )
         response = httpx.post(
             f"{BASE_URL_ML}/predict",
             json=predict_payload,
