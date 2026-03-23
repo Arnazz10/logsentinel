@@ -5,12 +5,15 @@ USER root
 # Install Docker CLI
 RUN apt-get update && apt-get install -y \
     apt-transport-https \
+    build-essential \
     ca-certificates \
     curl \
     gnupg \
+    libpq-dev \
     lsb-release \
     make \
     python3 \
+    python3-dev \
     python3-pip \
     python3-venv
     
