@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: infra/jenkins/Dockerfile
+    container_name: logsentinel-jenkins
+    ports:
+      - "8085:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    restart: unless-stopped
+    networks:
+      - logsentinel-net
+
+volumes:
+  jenkins-data:
+    name: logsentinel-jenkins-data
+
+networks:
+  logsentinel-net:
+    external: true

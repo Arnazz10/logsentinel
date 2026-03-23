@@ -45,13 +45,13 @@
               {"color": "red", "value": 500}
             ]
           },
-          "unit": "logs/s"
+          "unit": "short"
         }
       },
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "rate(ingestion_api_logs_ingested_total[1m])",
+          "expr": "sum(rate(logs_ingested_total[1m]))",
           "legendFormat": "Logs/sec"
         }
       ]
@@ -139,7 +139,7 @@
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "sum(kafka_consumer_group_lag)",
+          "expr": "sum(kafka_consumergroup_lag)",
           "legendFormat": "Total Lag"
         }
       ]
@@ -151,12 +151,12 @@
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
       "options": {"tooltip": {"mode": "multi"}},
       "fieldConfig": {
-        "defaults": {"unit": "logs/s", "custom": {"lineWidth": 2}}
+        "defaults": {"unit": "short", "custom": {"lineWidth": 2}}
       },
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "rate(ingestion_api_logs_ingested_total[1m])",
+          "expr": "sum(rate(logs_ingested_total[1m]))",
           "legendFormat": "Logs/sec"
         }
       ]
@@ -188,34 +188,39 @@
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "histogram_quantile(0.50, rate(ingestion_api_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"log-ingestion-api\"}[5m])) by (le))",
           "legendFormat": "p50"
         },
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "histogram_quantile(0.95, rate(ingestion_api_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"log-ingestion-api\"}[5m])) by (le))",
           "legendFormat": "p95"
         },
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "histogram_quantile(0.99, rate(ingestion_api_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"log-ingestion-api\"}[5m])) by (le))",
           "legendFormat": "p99"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "CPU Usage per Service",
+      "title": "Kafka Publish Rate",
       "id": 8,
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
       "fieldConfig": {
-        "defaults": {"unit": "percentunit", "max": 1}
+        "defaults": {"unit": "short", "custom": {"lineWidth": 2}}
       },
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
-          "expr": "rate(container_cpu_usage_seconds_total{namespace=\"logsentinel\"}[1m])",
-          "legendFormat": "{{ pod }}"
+          "expr": "sum(rate(kafka_publish_success_total[1m]))",
+          "legendFormat": "Published/sec"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "expr": "sum(rate(kafka_publish_errors_total[1m]))",
+          "legendFormat": "Errors/sec"
         }
       ]
     },
