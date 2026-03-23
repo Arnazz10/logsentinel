@@ -27,9 +27,14 @@ pipeline {
         stage('Setup Python Environment') {
             steps {
                 sh """
-                    python3 -m venv .venv
+                    python3 -m venv .bootstrap
+                    . .bootstrap/bin/activate
+                    python -m pip install --upgrade pip setuptools wheel uv
+                    export UV_PYTHON_INSTALL_DIR="${WORKSPACE}/.uv-python"
+                    uv python install 3.11
+                    uv venv --python 3.11 --seed .venv
                     . .venv/bin/activate
-                    python -m pip install --upgrade pip setuptools wheel
+                    python --version
                 """
             }
         }
