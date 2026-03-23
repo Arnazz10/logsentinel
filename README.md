@@ -14,7 +14,7 @@
 
 **LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards 
 
-Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastructure, with a full DevOps CI/CD pipeline powered by GitHub Actions.
+Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastructure, with a full DevOps CI/CD pipeline powered by Jenkins.
 
 ---
 
@@ -92,7 +92,8 @@ logsentinel/
 │   │   ├── configmaps/
 │   │   ├── secrets/
 │   │   └── hpa/
-│   └── helm/                 # Helm chart for full deployment
+│   ├── helm/                 # Helm chart for full deployment
+│   └── jenkins/              # Jenkins Dockerfile and config
 ├── pipeline/
 │   ├── kafka/                # Kafka + Zookeeper docker-compose
 │   └── fluentd/              # Fluentd config files
@@ -108,10 +109,9 @@ logsentinel/
 │   ├── unit/
 │   ├── integration/
 │   └── load/
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml         # GitHub Actions pipeline
+├── Jenkinsfile               # Jenkins CI/CD pipeline
 ├── docker-compose.yml        # Full local dev environment
+├── docker-compose.jenkins.yml # Jenkins server setup
 ├── docker-compose.prod.yml   # Production compose
 ├── Makefile                  # Shortcuts: make build, make test, make deploy
 ├── requirements.txt
@@ -283,7 +283,7 @@ kubectl get pods -n logsentinel
 
 ---
 
-## 🔄 CI/CD Pipeline (GitHub Actions)
+## 🔄 CI/CD Pipeline (Jenkins)
 
 The pipeline triggers on `push` to `main` or any `pull_request`.
 
@@ -292,11 +292,27 @@ The pipeline triggers on `push` to `main` or any `pull_request`.
 │  lint-and-test  │────▶│ build-and-push   │────▶│   deploy    │
 │                 │     │                  │     │             │
 │ • flake8        │     │ • Docker build   │     │ • kubectl   │
-│ • black         │     │ • Tag with SHA   │     │ • Helm upgrade│
-│ • pytest        │     │ • Push to ECR    │     │ • Health check│
+│ • black         │     │ • Tag with SHA   │     │ • Helm      │
+│ • pytest        │     │ • Push to ECR    │     │ • Health    │
 │ • coverage      │     │                  │     │             │
 └─────────────────┘     └──────────────────┘     └─────────────┘
 ```
+
+### Jenkins Setup
+
+Start Jenkins locally:
+
+```bash
+docker compose -f docker-compose.jenkins.yml up -d
+```
+
+Access Jenkins at http://localhost:8085
+
+Configure Jenkins credentials:
+- `docker-hub-creds` - Docker Hub username/password
+- `kube-config-id` - Kubernetes config file
+- `aws-creds` - AWS access key/secret
+- `logsentinel-secrets` - Application secrets
 
 ---
 
