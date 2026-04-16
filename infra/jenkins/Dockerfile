@@ -31,6 +31,9 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 # Install Helm
 RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# Jenkins bootstrap scripts
+COPY infra/jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
+
 # Create symlink for python3 as python
 RUN ln -s /usr/bin/python3 /usr/bin/python
 

@@ -12,6 +12,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - JENKINS_ADMIN_ID=logsentinel
+      - JENKINS_ADMIN_PASSWORD=logsentinel
     restart: unless-stopped
     networks:
       - logsentinel-net
