@@ -34,8 +34,12 @@ RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | b
 # Jenkins bootstrap scripts
 COPY infra/jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 
+# Jenkins plugins required for pipeline jobs
+COPY infra/jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
 # Create symlink for python3 as python
-RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 # Add jenkins user to docker group
 RUN (getent group docker || groupadd -g 999 docker) && usermod -aG docker jenkins

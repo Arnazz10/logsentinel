@@ -35,12 +35,11 @@ pipeline {
             steps {
                 sh """
                     rm -rf .venv
-                    python3 -m venv .venv
-                    . .venv/bin/activate
-                    python -m pip install --upgrade pip setuptools wheel
-                    python -m pip install -r requirements.txt
-                    python -m pip install flake8 black isort pytest pytest-cov pytest-asyncio httpx testcontainers locust
-                    python --version
+                    docker run --rm \
+                      -v "$PWD":/workspace \
+                      -w /workspace \
+                      python:3.11-slim \
+                      bash -lc 'python -m venv .venv && . .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt && python -m pip install flake8 black isort pytest pytest-cov pytest-asyncio httpx testcontainers locust && python --version'
                 """
             }
         }
