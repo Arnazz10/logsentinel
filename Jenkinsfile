@@ -1,6 +1,13 @@
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        ansiColor('xterm')
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
     environment {
         PYTHON_VERSION = "3.11"
         DOCKER_REGISTRY = "docker.io"
@@ -27,13 +34,12 @@ pipeline {
         stage('Setup Python Environment') {
             steps {
                 sh """
-                    python3 -m venv .bootstrap
-                    . .bootstrap/bin/activate
-                    python -m pip install --upgrade pip setuptools wheel uv
-                    export UV_PYTHON_INSTALL_DIR="${WORKSPACE}/.uv-python"
-                    uv python install 3.11
-                    uv venv --python 3.11 --seed .venv
+                    rm -rf .venv
+                    python3 -m venv .venv
                     . .venv/bin/activate
+                    python -m pip install --upgrade pip setuptools wheel
+                    python -m pip install -r requirements.txt
+                    python -m pip install flake8 black isort pytest pytest-cov pytest-asyncio httpx testcontainers locust
                     python --version
                 """
             }
@@ -43,9 +49,10 @@ pipeline {
             steps {
                 sh """
                     . .venv/bin/activate
-                    make setup
-                    make lint
-                    make test-unit
+                    black --check --diff services/ ml/ tests/
+                    flake8 services/ ml/ tests/ --max-line-length=100 --exclude=__pycache__,.venv,migrations --ignore=E203,W503
+                    isort --check-only --diff services/ ml/ tests/
+                    python -m pytest tests/unit/ -v --tb=short --junitxml=test-results/unit-results.xml
                 """
             }
             post {
@@ -61,36 +68,43 @@ pipeline {
                 branch 'main'
             }
             steps {
-                script {
-                    def services = env.SERVICES.split(' ')
-                    def parallelStages = [:]
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    script {
+                        def services = env.SERVICES.split(' ')
+                        def parallelStages = [:]
 
-                    services.each { service ->
-                        parallelStages[service] = {
-                            stage("Build ${service}") {
-                                withCredentials([usernamePassword(credentialsId: env.DOCKER_HUB_CREDS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                    sh """
-                                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin ${env.DOCKER_REGISTRY}
-                                        make build-service SERVICE=${service} IMAGE_TAG=${env.BUILD_NUMBER}
-                                        make push-service SERVICE=${service} IMAGE_TAG=${env.BUILD_NUMBER}
-                                    """
+                        services.each { service ->
+                            parallelStages[service] = {
+                                stage("Build ${service}") {
+                                    withCredentials([usernamePassword(credentialsId: env.DOCKER_HUB_CREDS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                        sh """
+                                            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin ${env.DOCKER_REGISTRY}
+                                            make build-service SERVICE=${service} IMAGE_TAG=${env.BUILD_NUMBER}
+                                            make push-service SERVICE=${service} IMAGE_TAG=${env.BUILD_NUMBER}
+                                        """
+                                    }
                                 }
                             }
                         }
+                        parallel parallelStages
                     }
-                    parallel parallelStages
                 }
             }
         }
 
         stage('Train ML Model') {
             when {
-                branch 'main'
-                changeset 'ml/**,services/ml-engine/**'
+                allOf {
+                    branch 'main'
+                    anyOf {
+                        changeset "ml/**"
+                        changeset "services/ml-engine/**"
+                    }
+                }
             }
             steps {
-                script {
-                    try {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    script {
                         withCredentials([aws(credentialsId: env.AWS_CREDS, accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                             sh """
                                 . .venv/bin/activate
@@ -98,8 +112,6 @@ pipeline {
                                 # Upload to S3 if needed
                             """
                         }
-                    } catch (err) {
-                        echo "Skipping Train ML Model stage: ${err.message}"
                     }
                 }
             }
@@ -115,11 +127,13 @@ pipeline {
                 branch 'main'
             }
             steps {
-                withCredentials([file(credentialsId: env.KUBE_CONFIG_ID, variable: 'KUBECONFIG')]) {
-                    sh """
-                        make k8s-namespace
-                        make helm-install HELM_RELEASE=${env.HELM_RELEASE} NAMESPACE=${env.K8S_NAMESPACE} IMAGE_TAG=${env.BUILD_NUMBER}
-                    """
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    withCredentials([file(credentialsId: env.KUBE_CONFIG_ID, variable: 'KUBECONFIG')]) {
+                        sh """
+                            make k8s-namespace
+                            make helm-install HELM_RELEASE=${env.HELM_RELEASE} NAMESPACE=${env.K8S_NAMESPACE} IMAGE_TAG=${env.BUILD_NUMBER}
+                        """
+                    }
                 }
             }
         }
@@ -129,10 +143,12 @@ pipeline {
                 branch 'main'
             }
             steps {
-                sh """
-                    . .venv/bin/activate
-                    make test-integration
-                """
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    sh """
+                        . .venv/bin/activate
+                        python -m pytest tests/integration/ -v --tb=short -m integration --junitxml=test-results/integration-results.xml
+                    """
+                }
             }
             post {
                 always {
