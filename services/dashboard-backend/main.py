@@ -14,6 +14,7 @@ Endpoints:
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from app.config import settings
@@ -24,7 +25,8 @@ from app.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.redis_cache import RedisCache
 from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 
 logger = get_logger(__name__)
@@ -32,6 +34,8 @@ logger = get_logger(__name__)
 es_client: Optional[DashboardESClient] = None
 db_client: Optional[DashboardDB] = None
 cache: Optional[RedisCache] = None
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+ASSETS_DIR = FRONTEND_DIR / "assets"
 
 
 @asynccontextmanager
@@ -87,6 +91,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 
 @app.middleware("http")
@@ -109,12 +114,24 @@ metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
-@app.get("/", tags=["Meta"])
+@app.get("/", tags=["Frontend"], include_in_schema=False)
 async def root():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/dashboard", tags=["Frontend"], include_in_schema=False)
+async def dashboard():
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/api", tags=["Meta"])
+async def api_meta():
     return {
         "service": "LogSentinel Dashboard Backend",
         "version": "1.0.0",
         "docs": "/docs",
+        "frontend": "/",
+        "dashboard": "/dashboard",
     }
 
 

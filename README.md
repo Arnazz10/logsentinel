@@ -18,6 +18,12 @@ Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastru
 
 ---
 
+## 🖼️ Frontend Preview
+
+![LogSentinel Frontend Preview](docs/images/logsentinel-frontend-preview.svg)
+
+---
+
 ## 🏗️ Architecture
 
 ```
