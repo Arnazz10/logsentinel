@@ -21,8 +21,8 @@ HELM_RELEASE        := logsentinel
 HELM_CHART_PATH     := infra/helm/logsentinel
 K8S_MANIFESTS_DIR   := infra/kubernetes
 TERRAFORM_DIR       := infra/terraform
-PYTHON              := python3
-PIP                 := pip3
+PYTHON              ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+PIP                 ?= $(if $(wildcard .venv/bin/pip),.venv/bin/pip,pip3)
 SERVICES            := log-ingestion-api log-processor ml-engine alert-service dashboard-backend
 
 # Colors for output
@@ -177,11 +177,11 @@ format: ## Auto-format code with black + isort
 # Testing
 # -----------------------------------------------------------------------------
 install-test-deps: ## Install test dependencies
-	$(PIP) install pytest pytest-cov pytest-asyncio httpx testcontainers locust --quiet
+	$(PYTHON) -m pip install pytest pytest-cov pytest-asyncio httpx testcontainers locust --quiet
 
 test: install-test-deps ## Run all tests with coverage report
 	@echo "$(CYAN)▶ Running all tests...$(RESET)"
-	pytest tests/ \
+	$(PYTHON) -m pytest tests/ \
 		--cov=services \
 		--cov-report=term-missing \
 		--cov-report=xml:coverage.xml \
@@ -192,12 +192,12 @@ test: install-test-deps ## Run all tests with coverage report
 
 test-unit: install-test-deps ## Run unit tests only
 	@echo "$(CYAN)▶ Running unit tests...$(RESET)"
-	pytest tests/unit/ -v --tb=short
+	$(PYTHON) -m pytest tests/unit/ -v --tb=short
 	@echo "$(GREEN)✔ Unit tests completed.$(RESET)"
 
 test-integration: install-test-deps ## Run integration tests (requires Docker)
 	@echo "$(CYAN)▶ Running integration tests...$(RESET)"
-	pytest tests/integration/ -v --tb=short -m integration
+	$(PYTHON) -m pytest tests/integration/ -v --tb=short -m integration
 	@echo "$(GREEN)✔ Integration tests completed.$(RESET)"
 
 test-load: ## Run Locust load tests against local services
