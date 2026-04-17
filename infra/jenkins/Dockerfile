@@ -9,6 +9,7 @@ RUN rm -rf /var/lib/apt/lists/* && apt-get clean && \
     build-essential \
     ca-certificates \
     curl \
+    git \
     gnupg \
     libpq-dev \
     lsb-release \

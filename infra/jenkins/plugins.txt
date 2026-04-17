@@ -7,3 +7,4 @@ credentials
 credentials-binding
 plain-credentials
 ssh-credentials
+junit
