@@ -10,6 +10,8 @@ pipeline {
 
     environment {
         PYTHON_VERSION = "3.11"
+        PYTHON_CI_IMAGE = "python:3.11-slim"
+        HOST_REPO_PATH = "/home/arnab/CODE/logsentinel"
         DOCKER_REGISTRY = "docker.io"
         IMAGE_PREFIX = "arnab/logsentinel" // Adjust with actual Docker Hub username or variable
         SERVICES = "log-ingestion-api log-processor ml-engine alert-service dashboard-backend"
@@ -31,27 +33,28 @@ pipeline {
             }
         }
 
-        stage('Setup Python Environment') {
-            steps {
-                sh """
-                    rm -rf .venv
-                    docker run --rm \
-                      -v "$PWD":/workspace \
-                      -w /workspace \
-                      python:3.11-slim \
-                      bash -lc 'python -m venv .venv && . .venv/bin/activate && python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements.txt && python -m pip install flake8 black isort pytest pytest-cov pytest-asyncio httpx testcontainers locust && python --version'
-                """
-            }
-        }
-
         stage('Lint & Test') {
             steps {
                 sh """
-                    . .venv/bin/activate
-                    black --check --diff services/ ml/ tests/
-                    flake8 services/ ml/ tests/ --max-line-length=100 --exclude=__pycache__,.venv,migrations --ignore=E203,W503
-                    isort --check-only --diff services/ ml/ tests/
-                    python -m pytest tests/unit/ -v --tb=short --junitxml=test-results/unit-results.xml
+                    set -eux
+                    docker run --rm \
+                      -v "${HOST_REPO_PATH}":/workspace \
+                      -w /workspace \
+                      "${PYTHON_CI_IMAGE}" \
+                      bash -lc '
+                        set -eux
+                        rm -rf .venv-ci
+                        python -m venv .venv-ci
+                        . .venv-ci/bin/activate
+                        python -m pip install --upgrade pip setuptools wheel
+                        python -m pip install -r requirements.txt
+                        python -m pip install flake8 black isort pytest pytest-cov pytest-asyncio httpx testcontainers locust
+                        black --check --diff services/ ml/ tests/
+                        flake8 services/ ml/ tests/ --max-line-length=100 --exclude=__pycache__,.venv,.venv-ci,migrations --ignore=E203,W503
+                        isort --profile black --check-only --diff services/ ml/ tests/
+                        mkdir -p test-results
+                        python -m pytest tests/unit/ -v --tb=short --junitxml=test-results/unit-results.xml
+                      '
                 """
             }
             post {
@@ -104,13 +107,21 @@ pipeline {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     script {
-                        withCredentials([aws(credentialsId: env.AWS_CREDS, accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                            sh """
-                                . .venv/bin/activate
-                                make train
-                                # Upload to S3 if needed
-                            """
-                        }
+                        sh """
+                            set -eux
+                            docker run --rm \
+                              -v "${HOST_REPO_PATH}":/workspace \
+                              -w /workspace \
+                              "${PYTHON_CI_IMAGE}" \
+                              bash -lc '
+                                set -eux
+                                python -m venv .venv-ci
+                                . .venv-ci/bin/activate
+                                python -m pip install --upgrade pip setuptools wheel
+                                python -m pip install -r requirements.txt
+                                python ml/train.py
+                              '
+                        """
                     }
                 }
             }
@@ -144,8 +155,21 @@ pipeline {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     sh """
-                        . .venv/bin/activate
-                        python -m pytest tests/integration/ -v --tb=short -m integration --junitxml=test-results/integration-results.xml
+                        set -eux
+                        docker run --rm \
+                          -v "${HOST_REPO_PATH}":/workspace \
+                          -w /workspace \
+                          "${PYTHON_CI_IMAGE}" \
+                          bash -lc '
+                            set -eux
+                            python -m venv .venv-ci
+                            . .venv-ci/bin/activate
+                            python -m pip install --upgrade pip setuptools wheel
+                            python -m pip install -r requirements.txt
+                            python -m pip install pytest pytest-cov pytest-asyncio httpx testcontainers locust
+                            mkdir -p test-results
+                            python -m pytest tests/integration/ -v --tb=short -m integration --junitxml=test-results/integration-results.xml
+                          '
                     """
                 }
             }
