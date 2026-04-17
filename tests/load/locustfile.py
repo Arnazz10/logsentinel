@@ -17,11 +17,10 @@ Usage:
         --html=tests/load/report.html
 """
 
-import json
 import random
 from datetime import datetime, timezone
 
-from locust import HttpUser, TaskSet, between, constant_pacing, task
+from locust import HttpUser, TaskSet, between, task
 
 # ─── Shared data generation ───────────────────────────────────────────────────
 

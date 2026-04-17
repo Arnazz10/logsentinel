@@ -16,9 +16,8 @@ import json
 import os
 from datetime import datetime, timezone
 
-import pytest
 import httpx
-
+import pytest
 
 BASE_URL_INGESTION = os.getenv("INGESTION_API_URL", "http://localhost:8000")
 BASE_URL_DASHBOARD = os.getenv("DASHBOARD_API_URL", "http://localhost:8002")

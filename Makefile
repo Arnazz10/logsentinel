@@ -164,13 +164,13 @@ lint: ## Run flake8 + black linting checks
 		--exclude=__pycache__,.venv,migrations \
 		--ignore=E203,W503
 	@echo "$(CYAN)  Running isort (import sort check)...$(RESET)"
-	isort --check-only --diff services/ ml/ tests/
+	isort --profile black --check-only --diff services/ ml/ tests/
 	@echo "$(GREEN)✔ All lint checks passed.$(RESET)"
 
 format: ## Auto-format code with black + isort
 	@echo "$(CYAN)▶ Formatting code...$(RESET)"
 	black services/ ml/ tests/
-	isort services/ ml/ tests/
+	isort --profile black services/ ml/ tests/
 	@echo "$(GREEN)✔ Code formatted.$(RESET)"
 
 # -----------------------------------------------------------------------------
