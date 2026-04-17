@@ -5,12 +5,20 @@ Tests for Pydantic model validation, Kafka producer behavior,
 and FastAPI endpoint responses.
 """
 
-import json
+import asyncio
+import sys
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
+
+
+def _activate_service_path(service_path: str) -> None:
+    if service_path not in sys.path:
+        sys.path.insert(0, service_path)
+
+    for module_name in list(sys.modules):
+        if module_name == "app" or module_name.startswith("app."):
+            sys.modules.pop(module_name, None)
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -52,9 +60,7 @@ class TestLogEntryModel:
 
     def test_valid_log_entry(self, sample_log_entry):
         """Valid log entry should parse without errors."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
 
         entry = LogEntry(**sample_log_entry)
@@ -64,9 +70,7 @@ class TestLogEntryModel:
 
     def test_missing_required_fields(self):
         """Missing required fields should raise ValidationError."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
 
@@ -75,9 +79,7 @@ class TestLogEntryModel:
 
     def test_log_level_case_insensitive(self, sample_log_entry):
         """Log level should be normalised to uppercase."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
 
         sample_log_entry["level"] = "error"
@@ -86,9 +88,7 @@ class TestLogEntryModel:
 
     def test_response_time_defaults_to_zero(self, sample_log_entry):
         """response_time_ms should default gracefully."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
 
         sample_log_entry.pop("response_time_ms", None)
@@ -97,9 +97,7 @@ class TestLogEntryModel:
 
     def test_negative_response_time_rejected(self, sample_log_entry):
         """Negative response_time_ms should be rejected."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
 
@@ -109,9 +107,7 @@ class TestLogEntryModel:
 
     def test_invalid_log_level_rejected(self, sample_log_entry):
         """Invalid log level should be rejected."""
-        import sys
-
-        sys.path.insert(0, "services/log-ingestion-api")
+        _activate_service_path("services/log-ingestion-api")
         from app.models import LogEntry
         from pydantic import ValidationError
 
@@ -128,10 +124,8 @@ class TestFeatureExtractor:
 
     def test_extract_hour_of_day(self):
         """hour_of_day should be correctly extracted from ISO timestamp."""
-        import sys
-
-        sys.path.insert(0, "services/log-processor")
-        from app.feature_extractor import extract_features
+        _activate_service_path("services/log-processor")
+        from app.feature_extractor import FeatureExtractor
 
         log = {
             "timestamp": "2024-06-15T14:30:00Z",
@@ -141,15 +135,16 @@ class TestFeatureExtractor:
             "service": "user-service",
             "request_count_last_60s": 10,
         }
-        features = extract_features(log)
+        extractor = FeatureExtractor(redis_url="redis://localhost:6379/15")
+        features = asyncio.run(extractor.extract(log))
         assert features["hour_of_day"] == 14
 
     def test_log_level_encoding(self):
         """Log levels should be encoded to correct integers."""
-        import sys
+        _activate_service_path("services/log-processor")
+        from app.feature_extractor import FeatureExtractor
 
-        sys.path.insert(0, "services/log-processor")
-        from app.feature_extractor import extract_features
+        extractor = FeatureExtractor(redis_url="redis://localhost:6379/15")
 
         expected = {
             "DEBUG": 0,
@@ -168,20 +163,19 @@ class TestFeatureExtractor:
                 "service": "api-gateway",
                 "request_count_last_60s": 5,
             }
-            features = extract_features(log)
+            features = asyncio.run(extractor.extract(log))
             assert (
                 features["log_level_encoded"] == expected_int
             ), f"Failed for level {level_str}"
 
     def test_missing_fields_use_defaults(self):
         """Missing optional fields should use sensible defaults."""
-        import sys
-
-        sys.path.insert(0, "services/log-processor")
-        from app.feature_extractor import extract_features
+        _activate_service_path("services/log-processor")
+        from app.feature_extractor import FeatureExtractor
 
         log = {"timestamp": "2024-01-01T08:00:00Z", "level": "INFO"}
-        features = extract_features(log)
+        extractor = FeatureExtractor(redis_url="redis://localhost:6379/15")
+        features = asyncio.run(extractor.extract(log))
         assert "hour_of_day" in features
         assert "response_time_ms" in features
         assert features["response_time_ms"] >= 0
@@ -212,8 +206,8 @@ class TestAnomalyDetection:
 
     def test_normal_log_predicted_normal(self, trained_model):
         """Normal log features should be predicted as normal (1)."""
-        import numpy as np
         import joblib
+        import numpy as np
 
         model = joblib.load(trained_model)
         X_normal = np.array([[12, 150.0, 200, 1, 20, 1]])
@@ -226,8 +220,8 @@ class TestAnomalyDetection:
 
     def test_anomalous_features_lower_score(self, trained_model):
         """Anomalous features should have lower anomaly score than normal."""
-        import numpy as np
         import joblib
+        import numpy as np
 
         model = joblib.load(trained_model)
 
@@ -247,28 +241,22 @@ class TestAlertDeduplication:
 
     def test_dedup_key_is_consistent(self):
         """Two identical alerts should produce the same dedup key."""
-        import sys
+        _activate_service_path("services/alert-service")
+        from app.deduplicator import _build_dedup_key
 
-        sys.path.insert(0, "services/alert-service")
-        from app.deduplicator import AlertDeduplicator
-
-        dedup = AlertDeduplicator(redis_url="redis://localhost", window_seconds=300)
         alert = {"service": "auth-service", "level": "ERROR", "error_code": 500}
-        key1 = dedup._build_key(alert)
-        key2 = dedup._build_key(alert)
+        key1 = _build_dedup_key(alert)
+        key2 = _build_dedup_key(alert)
         assert key1 == key2
 
     def test_different_services_produce_different_keys(self):
         """Alerts from different services should have different dedup keys."""
-        import sys
+        _activate_service_path("services/alert-service")
+        from app.deduplicator import _build_dedup_key
 
-        sys.path.insert(0, "services/alert-service")
-        from app.deduplicator import AlertDeduplicator
-
-        dedup = AlertDeduplicator(redis_url="redis://localhost", window_seconds=300)
         alert_a = {"service": "auth-service", "level": "ERROR", "error_code": 500}
         alert_b = {"service": "payment-service", "level": "ERROR", "error_code": 500}
-        assert dedup._build_key(alert_a) != dedup._build_key(alert_b)
+        assert _build_dedup_key(alert_a) != _build_dedup_key(alert_b)
 
 
 # ─── Dashboard Stats Tests ────────────────────────────────────────────────────
@@ -279,9 +267,7 @@ class TestDashboardHelpers:
 
     def test_serialise_alert_converts_datetime(self):
         """_serialise_alert should convert datetime objects to ISO strings."""
-        import sys
-
-        sys.path.insert(0, "services/dashboard-backend")
+        _activate_service_path("services/dashboard-backend")
         from main import _serialise_alert
 
         alert = {
@@ -295,9 +281,7 @@ class TestDashboardHelpers:
 
     def test_serialise_alert_passthrough_scalars(self):
         """Non-datetime fields should pass through unchanged."""
-        import sys
-
-        sys.path.insert(0, "services/dashboard-backend")
+        _activate_service_path("services/dashboard-backend")
         from main import _serialise_alert
 
         alert = {"id": 42, "service": "test", "score": -0.25}
