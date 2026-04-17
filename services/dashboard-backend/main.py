@@ -23,7 +23,7 @@ from app.elasticsearch_client import DashboardESClient
 from app.logger import get_logger
 from app.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.redis_cache import RedisCache
-from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -83,7 +83,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LogSentinel — Dashboard Backend",
-    description="Query API for Grafana dashboards and frontend. Provides log search, anomaly listing, and system stats.",
+    description=(
+        "Query API for Grafana dashboards and frontend. "
+        "Provides log search, anomaly listing, and system stats."
+    ),
     version="1.0.0",
     lifespan=lifespan,
 )

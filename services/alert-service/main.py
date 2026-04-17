@@ -13,10 +13,8 @@ Flow:
 """
 
 import asyncio
-import logging
 import signal
 import sys
-from datetime import datetime, timezone
 
 from app.alerter import AlertRouter
 from app.config import settings

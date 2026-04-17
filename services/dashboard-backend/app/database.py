@@ -5,7 +5,7 @@ Async PostgreSQL client (asyncpg) for querying alert/anomaly history.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import asyncpg

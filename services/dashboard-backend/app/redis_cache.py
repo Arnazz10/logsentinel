@@ -471,7 +471,10 @@ class DashboardDB:
         try:
             async with self._pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT COUNT(*) FROM alerts WHERE detected_at >= NOW() - INTERVAL '1 hour' AND deduplicated = FALSE"
+                    (
+                        "SELECT COUNT(*) FROM alerts WHERE detected_at >= NOW() "
+                        "- INTERVAL '1 hour' AND deduplicated = FALSE"
+                    )
                 )
                 return int(row[0]) if row else 0
         except Exception:

@@ -288,10 +288,9 @@ class SlackNotifier(BaseNotifier):
 
         # Format detected_at for display
         try:
-            dt = datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
-            display_time = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+            datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            display_time = detected_at
+            pass
 
         # Build attachments (fallback for clients that don't support blocks)
         fields = [
@@ -323,7 +322,10 @@ class SlackNotifier(BaseNotifier):
                     "text": f"*Message:* {message}",
                     "fields": fields,
                     "footer": f"LogSentinel | Alert ID: {alert_id[:8]}...",
-                    "footer_icon": "https://platform.slack-edge.com/img/default_application_icon.png",
+                    "footer_icon": (
+                        "https://platform.slack-edge.com/img/"
+                        "default_application_icon.png"
+                    ),
                     "ts": int(datetime.now(timezone.utc).timestamp()),
                 }
             ],
@@ -350,7 +352,10 @@ class SlackNotifier(BaseNotifier):
                         request_info=response.request_info,
                         history=response.history,
                         status=response.status,
-                        message=f"Slack webhook returned {response.status}: {response_text}",
+                        message=(
+                            f"Slack webhook returned {response.status}: "
+                            f"{response_text}"
+                        ),
                     )
                 if response_text != "ok":
                     logger.warning(
@@ -490,8 +495,10 @@ class EmailNotifier(BaseNotifier):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LogSentinel Alert</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif;
+             background-color: #f4f4f4;">
+  <table width="100%" cellpadding="0" cellspacing="0"
+      style="background-color: #f4f4f4; padding: 20px;">
     <tr>
       <td>
         <table width="600" cellpadding="0" cellspacing="0" align="center"

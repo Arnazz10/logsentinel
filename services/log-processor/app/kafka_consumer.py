@@ -30,11 +30,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
 from aiokafka import AIOKafkaConsumer
-from aiokafka.errors import (
-    ConsumerStoppedError,
-    KafkaConnectionError,
-    KafkaError,
-)
+from aiokafka.errors import ConsumerStoppedError, KafkaConnectionError, KafkaError
 
 logger = logging.getLogger(__name__)
 

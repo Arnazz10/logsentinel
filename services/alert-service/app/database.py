@@ -352,7 +352,10 @@ class DatabaseClient:
                 await conn.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
             except Exception as exc:
                 logger.warning(
-                    "Could not create pgcrypto extension (may already exist or insufficient permissions)",
+                    (
+                        "Could not create pgcrypto extension "
+                        "(may already exist or insufficient permissions)"
+                    ),
                     extra={"error": str(exc)},
                 )
 

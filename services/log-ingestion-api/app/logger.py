@@ -33,7 +33,6 @@ Output (JSON, one line per record):
 import logging
 import logging.config
 import os
-import sys
 from typing import Any
 
 from pythonjsonlogger import jsonlogger

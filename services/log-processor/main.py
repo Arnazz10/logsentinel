@@ -10,12 +10,8 @@ Flow:
 """
 
 import asyncio
-import json
-import logging
 import signal
 import sys
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from app.config import settings
 from app.elasticsearch_client import ElasticsearchClient
@@ -26,7 +22,6 @@ from app.logger import get_logger
 from app.metrics import (
     ES_INDEX_ERRORS,
     ES_INDEX_SUCCESS,
-    KAFKA_CONSUME_LAG,
     LOGS_FAILED_TOTAL,
     LOGS_PROCESSED_TOTAL,
     PROCESSING_DURATION,

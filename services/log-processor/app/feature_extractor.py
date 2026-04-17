@@ -18,7 +18,6 @@ Redis is used for two purposes:
 All Redis keys are namespaced under "logsentinel:" to avoid collisions.
 """
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any

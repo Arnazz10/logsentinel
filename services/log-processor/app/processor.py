@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.feature_extractor import LOG_LEVEL_ENCODING, FeatureExtractor
+from app.feature_extractor import FeatureExtractor
 
 logger = logging.getLogger(__name__)
 

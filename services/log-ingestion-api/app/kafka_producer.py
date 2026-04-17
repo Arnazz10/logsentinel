@@ -34,7 +34,6 @@ from aiokafka.errors import (
     NodeNotReadyError,
 )
 from tenacity import (
-    RetryError,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
