@@ -22,8 +22,6 @@ Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastru
 
 ![LogSentinel — Detect the log patterns that break systems before users feel them](docs/images/logsentinel-frontend-preview.png)
 
-> **Live Demo →** [logsentinel.vercel.app](https://logsentinel.vercel.app) &nbsp;|&nbsp; **Dashboard** &nbsp;|&nbsp; **API Docs** &nbsp;|&nbsp; **Open Console**
-
 ---
 
 ## 🏗️ Architecture
