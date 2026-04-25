@@ -1,93 +1,152 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Terminal, Cpu, Shield, Zap, Search, ChevronRight, Play, Square, Settings } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Play, Search, Settings, Square, Terminal } from 'lucide-react';
+
+const clusters = [
+  ['prod-cluster-01', 'us-east-1'],
+  ['staging-cluster', 'us-west-2'],
+  ['dev-sandbox', 'ap-south-1'],
+];
+
+const lines = [
+  { time: '19:35:01', level: 'INFO', service: 'auth', msg: 'User authenticated with session token', anomaly: false },
+  { time: '19:35:04', level: 'DEBUG', service: 'ingest', msg: 'Buffer flush complete for 1,250 records', anomaly: false },
+  { time: '19:35:08', level: 'ERROR', service: 'db', msg: 'Query execution timeout after 5000ms', anomaly: true },
+  { time: '19:35:10', level: 'INFO', service: 'gateway', msg: 'GET /api/v1/health returned 200 OK', anomaly: false },
+  { time: '19:35:12', level: 'INFO', service: 'ml', msg: 'Inference latency 12ms with score -0.021', anomaly: false },
+  { time: '19:35:15', level: 'WARN', service: 'billing', msg: 'Retry storm detected against upstream provider', anomaly: true },
+];
+
+const tabs = ['Raw Stream', 'Anomalies', 'Live Metrics'];
 
 const OpenConsole = () => {
-  const [activeTab, setActiveTab] = useState('raw');
+  const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [activeCluster, setActiveCluster] = useState(clusters[0][0]);
+  const [running, setRunning] = useState(true);
+  const [query, setQuery] = useState('');
+  const [command, setCommand] = useState('');
+  const [history, setHistory] = useState(['logsentinel status --cluster prod-cluster-01']);
+
+  const visibleLines = useMemo(() => {
+    const normalized = query.toLowerCase().trim();
+    return lines.filter((line) => {
+      const matchesTab = activeTab !== 'Anomalies' || line.anomaly;
+      const matchesQuery = !normalized || `${line.level} ${line.service} ${line.msg}`.toLowerCase().includes(normalized);
+      return matchesTab && matchesQuery;
+    });
+  }, [activeTab, query]);
+
+  const runCommand = (event) => {
+    event.preventDefault();
+    if (!command.trim()) return;
+    setHistory((current) => [`${command.trim()}`, ...current].slice(0, 5));
+    setCommand('');
+  };
 
   return (
-    <div className="pt-24 min-h-screen bg-black">
-      <div className="border-b border-white/5 bg-white/[0.02] px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <Terminal size={18} className="text-accent-red" />
-            <span className="text-sm font-bold text-white">LogSentinel Console</span>
+    <section className="console-page">
+      <div className="console-shell">
+        <aside className="console-sidebar">
+          <div className="panel-head">
+            <h2>
+              <Terminal size={20} /> Console
+            </h2>
+            <button className="icon-button" type="button" aria-label="Console settings">
+              <Settings size={17} />
+            </button>
           </div>
-          <div className="flex items-center gap-1">
-            <TabButton active={activeTab === 'raw'} onClick={() => setActiveTab('raw')}>Raw Stream</TabButton>
-            <TabButton active={activeTab === 'anomalies'} onClick={() => setActiveTab('anomalies')}>Anomalies</TabButton>
-            <TabButton active={activeTab === 'metrics'} onClick={() => setActiveTab('metrics')}>Live Metrics</TabButton>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 rounded-md">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[0.7rem] font-bold text-green-500 uppercase">Connected</span>
-          </div>
-          <Settings size={18} className="text-text-muted cursor-pointer hover:text-white transition-colors" />
-        </div>
-      </div>
 
-      <div className="flex h-[calc(100vh-140px)]">
-        {/* Sidebar */}
-        <div className="w-64 border-r border-white/5 bg-white/[0.01] p-4">
-          <h3 className="text-[0.65rem] font-bold text-text-muted uppercase tracking-widest mb-4">Clusters</h3>
-          <div className="space-y-1">
-            <ClusterItem active name="prod-cluster-01" region="us-east-1" />
-            <ClusterItem name="staging-cluster" region="us-west-2" />
-            <ClusterItem name="dev-sandbox" region="eu-central-1" />
+          <div className="search-box" style={{ marginBottom: 16 }}>
+            <Search size={16} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter stream" />
           </div>
-        </div>
 
-        {/* Main Terminal View */}
-        <div className="flex-1 bg-black p-6 font-mono text-[0.8rem] overflow-y-auto">
-          <div className="text-text-muted mb-4">
-            [SYS] LogSentinel Core v1.0.0 initialized.<br />
-            [SYS] Connected to Kafka bootstrap servers at kafka:9092<br />
-            [SYS] Isolation Forest model loaded. Contamination: 0.05<br />
-            [SYS] Listening for raw-logs topic events...
+          <div className="cluster-list">
+            {clusters.map(([name, region]) => (
+              <button
+                className={`cluster-button ${activeCluster === name ? 'active' : ''}`}
+                key={name}
+                type="button"
+                onClick={() => setActiveCluster(name)}
+              >
+                <strong>{name}</strong>
+                <span>{region}</span>
+              </button>
+            ))}
           </div>
-          <div className="space-y-1">
-            <ConsoleLine time="19:35:01" level="INFO" service="auth" msg="User authenticated" />
-            <ConsoleLine time="19:35:04" level="DEBUG" service="ingest" msg="Buffer flush complete" />
-            <ConsoleLine time="19:35:08" level="ERROR" service="db" msg="Query execution timeout" anomaly />
-            <ConsoleLine time="19:35:10" level="INFO" service="gateway" msg="GET /api/v1/health 200 OK" />
-            <ConsoleLine time="19:35:12" level="INFO" service="ml" msg="Inference latency: 12ms" />
+        </aside>
+
+        <main className="console-main">
+          <div className="console-topbar">
+            <div className="tab-list">
+              {tabs.map((tab) => (
+                <button
+                  className={`tab-button ${activeTab === tab ? 'active' : ''}`}
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+            <div className="row-actions">
+              <span className="status-pill">{running ? 'Connected' : 'Paused'}</span>
+              <button className="pill-button" type="button" onClick={() => setRunning((value) => !value)}>
+                {running ? <Square size={16} /> : <Play size={16} />}
+                {running ? 'Pause stream' : 'Resume stream'}
+              </button>
+            </div>
           </div>
-        </div>
+
+          <div className="terminal-window">
+            <div className="terminal-intro">
+              [SYS] LogSentinel Core v1.0.0 initialized<br />
+              [SYS] Active cluster: {activeCluster}<br />
+              [SYS] Kafka bootstrap servers connected at kafka:9092<br />
+              [SYS] Isolation Forest model loaded with contamination 0.05<br />
+              [SYS] Current view: {activeTab}
+            </div>
+
+            {activeTab === 'Live Metrics' ? (
+              <div className="metric-grid">
+                <div className="metric-card"><span className="metric-label">Consumer lag</span><span className="metric-value">1,204</span></div>
+                <div className="metric-card"><span className="metric-label">Inference p95</span><span className="metric-value">22ms</span></div>
+                <div className="metric-card"><span className="metric-label">Error rate</span><span className="metric-value">0.42%</span></div>
+                <div className="metric-card"><span className="metric-label">Alert queue</span><span className="metric-value">7</span></div>
+              </div>
+            ) : (
+              visibleLines.map((line) => (
+                <div className="terminal-line" key={`${line.time}-${line.service}-${line.msg}`}>
+                  <span className="log-time">[{line.time}]</span>
+                  <strong className={`level-${line.level.toLowerCase()}`}>{line.level}</strong>
+                  <span>{line.service}</span>
+                  <span>{line.msg}</span>
+                  {line.anomaly ? <span className="mini-chip">DETECTED</span> : <span />}
+                </div>
+              ))
+            )}
+
+            <div className="terminal-intro" style={{ marginTop: 24 }}>
+              {history.map((item) => (
+                <div key={item}><span className="prompt">$</span> {item}</div>
+              ))}
+            </div>
+          </div>
+
+          <form className="console-command" onSubmit={runCommand}>
+            <span className="prompt">logsentinel$</span>
+            <input
+              className="console-input"
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder="run query, tail service, or inspect anomaly"
+            />
+            <button className="pill-button primary" type="submit">Run</button>
+          </form>
+        </main>
       </div>
-    </div>
+    </section>
   );
 };
-
-const TabButton = ({ children, active, onClick }) => (
-  <button 
-    onClick={onClick}
-    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-      active ? 'bg-white/10 text-white' : 'text-text-muted hover:text-white'
-    }`}
-  >
-    {children}
-  </button>
-);
-
-const ClusterItem = ({ name, region, active }) => (
-  <div className={`p-3 rounded-xl cursor-pointer transition-all ${
-    active ? 'bg-accent-red/10 border border-accent-red/20' : 'hover:bg-white/5 border border-transparent'
-  }`}>
-    <div className="text-xs font-bold text-white mb-1">{name}</div>
-    <div className="text-[0.6rem] text-text-muted uppercase tracking-tighter">{region}</div>
-  </div>
-);
-
-const ConsoleLine = ({ time, level, service, msg, anomaly }) => (
-  <div className={`flex gap-4 p-1 hover:bg-white/5 rounded ${anomaly ? 'text-red-400 font-bold' : 'text-text-secondary'}`}>
-    <span className="text-text-muted">[{time}]</span>
-    <span className={`w-12 ${level === 'ERROR' ? 'text-red-500' : 'text-green-500'}`}>{level}</span>
-    <span className="text-blue-400 w-16">{service}</span>
-    <span>{msg}</span>
-    {anomaly && <span className="ml-auto text-[0.6rem] bg-red-500 text-white px-2 py-0.5 rounded uppercase">Detected Anomaly</span>}
-  </div>
-);
 
 export default OpenConsole;

@@ -1,129 +1,141 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Zap, Activity, Shield, Cpu, Layers, Globe, BarChart3, Database } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  BellRing,
+  Cpu,
+  Database,
+  GitBranch,
+  KeyRound,
+  Layers,
+  LockKeyhole,
+  Radio,
+  ServerCog,
+  ShieldCheck,
+  Workflow as WorkflowIcon,
+  Zap,
+} from 'lucide-react';
 
-// Common Page Header
 const PageHeader = ({ title, subtitle }) => (
-  <div className="mb-16 text-center">
-    <motion.h1 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="text-5xl font-bold text-white mb-4"
-    >
-      {title}
-    </motion.h1>
-    <motion.p 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-      className="text-xl text-text-secondary max-w-2xl mx-auto"
-    >
-      {subtitle}
-    </motion.p>
-  </div>
-);
-
-// Features Page
-export const Features = () => (
-  <div className="pt-32 pb-20 container">
-    <PageHeader 
-      title="Platform Features" 
-      subtitle="Advanced observability powered by machine learning and high-throughput streaming." 
-    />
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <FeatureCard 
-        icon={<Cpu />} 
-        title="AI Anomaly Detection" 
-        desc="Our proprietary Isolation Forest implementation scores every log entry in real-time, detecting deviations before they trigger traditional alerts." 
-      />
-      <FeatureCard 
-        icon={<Activity />} 
-        title="Live Log Streaming" 
-        desc="Powered by Apache Kafka, we handle millions of events per second with sub-second latency from ingestion to visualization." 
-      />
-      <FeatureCard 
-        icon={<Layers />} 
-        title="Unified Dashboard" 
-        desc="A single pane of glass for logs, metrics, and security events across your entire cloud-native infrastructure." 
-      />
-      <FeatureCard 
-        icon={<Zap />} 
-        title="Predictive Scaling" 
-        desc="Identify traffic spikes and resource exhaustion patterns automatically using our historical trend analysis engine." 
-      />
-      <FeatureCard 
-        icon={<Globe />} 
-        title="Multi-Cloud Native" 
-        desc="Seamless integration with AWS, Azure, and GCP. Deploy anywhere with our lightweight containerized agents." 
-      />
-      <FeatureCard 
-        icon={<Database />} 
-        title="Scalable Cold Storage" 
-        desc="Archive petabytes of logs to S3 or GCS with automated lifecycle policies and instant searchable retrieval." 
-      />
-    </div>
-  </div>
-);
-
-// Workflow Page
-export const Workflow = () => (
-  <div className="pt-32 pb-20 container">
-    <PageHeader 
-      title="System Workflow" 
-      subtitle="How LogSentinel processes your data from the edge to the console." 
-    />
-    <div className="max-w-4xl mx-auto space-y-12">
-      <Step icon="01" title="Ingestion" desc="Logs are collected via Fluentd or our REST API and validated against strictly defined Pydantic schemas." />
-      <Step icon="02" title="Streaming" desc="Validated logs are published to Apache Kafka, ensuring durability and high availability even during traffic spikes." />
-      <Step icon="03" title="Processing" desc="Kafka consumers clean, structure, and enrich logs with metadata before indexing into Elasticsearch." />
-      <Step icon="04" title="AI Inference" desc="The ML Engine analyzes log patterns using Isolation Forest to detect statistical anomalies." />
-      <Step icon="05" title="Alerting" desc="Anomalies are deduplicated in Redis and routed to Slack, Email, or PagerDuty based on severity." />
-    </div>
-  </div>
-);
-
-// Security Page
-export const Security = () => (
-  <div className="pt-32 pb-20 container">
-    <PageHeader 
-      title="Enterprise Security" 
-      subtitle="Built-in protection for your sensitive log data and infrastructure." 
-    />
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-      <div className="glass rounded-3xl p-10 border-white/5">
-        <Shield className="text-accent-red w-12 h-12 mb-6" />
-        <h3 className="text-2xl font-bold text-white mb-4">Zero-Trust Architecture</h3>
-        <p className="text-text-secondary leading-relaxed">
-          LogSentinel implements strict IAM roles and service-to-service authentication. All data is encrypted at rest using AES-256 and in transit via TLS 1.3.
-        </p>
-      </div>
-      <div className="glass rounded-3xl p-10 border-white/5">
-        <Globe className="text-accent-orange w-12 h-12 mb-6" />
-        <h3 className="text-2xl font-bold text-white mb-4">Compliance Ready</h3>
-        <p className="text-text-secondary leading-relaxed">
-          Maintain SOC2, HIPAA, and GDPR compliance with our automated log auditing, access controls, and data residency configurations.
-        </p>
-      </div>
-    </div>
-  </div>
+  <header className="page-header">
+    <p className="eyebrow">LogSentinel platform</p>
+    <h1>{title}</h1>
+    <p>{subtitle}</p>
+  </header>
 );
 
 const FeatureCard = ({ icon, title, desc }) => (
-  <div className="glass rounded-[2rem] p-8 hover:bg-white/[0.05] transition-all group">
-    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-      {React.cloneElement(icon, { size: 24, className: 'text-accent-red' })}
-    </div>
-    <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
-    <p className="text-text-secondary text-sm leading-relaxed">{desc}</p>
-  </div>
+  <article className="feature-card">
+    <span className="icon-box">{icon}</span>
+    <h3>{title}</h3>
+    <p>{desc}</p>
+  </article>
 );
 
-const Step = ({ icon, title, desc }) => (
-  <div className="flex gap-8 items-start">
-    <div className="text-5xl font-black text-white/10 tracking-tighter shrink-0">{icon}</div>
-    <div className="pt-2">
-      <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
-      <p className="text-text-secondary text-lg">{desc}</p>
+const features = [
+  [<Radio size={24} />, 'Live log ingestion', 'Stream single logs or batches into Kafka-backed ingestion with schema validation and service tagging.'],
+  [<Cpu size={24} />, 'AI anomaly detection', 'Isolation Forest scoring flags unusual latency, error bursts, retry storms, and suspicious request shapes.'],
+  [<BellRing size={24} />, 'Alert routing', 'Deduplicate anomalies and route critical events to Slack, email, PagerDuty, or your internal webhook.'],
+  [<Activity size={24} />, 'Service health timeline', 'Track throughput, anomaly rate, error budget burn, and rolling service status from one console.'],
+  [<Database size={24} />, 'Searchable retention', 'Persist structured logs for root cause analysis, audit review, and trend comparisons.'],
+  [<Layers size={24} />, 'Operator dashboard', 'Correlate raw logs, scored anomalies, source clusters, and remediation actions without switching tools.'],
+];
+
+const workflow = [
+  ['01', 'Collect', 'Agents, Fluent Bit, or the REST API submit structured service logs.'],
+  ['02', 'Validate', 'The API normalizes severity, timestamps, host metadata, response time, and error codes.'],
+  ['03', 'Stream', 'Kafka buffers validated events so processors can scale without dropping traffic.'],
+  ['04', 'Score', 'The ML worker enriches records and scores anomalies against Isolation Forest baselines.'],
+  ['05', 'Alert', 'Rules combine model output, severity, and service context before notifying responders.'],
+  ['06', 'Investigate', 'Operators jump from anomalies to raw logs, related services, and API traces.'],
+];
+
+const security = [
+  [<ShieldCheck size={24} />, 'Defense by default', 'TLS for transport, scoped API keys, service identity checks, and least-privilege deployment boundaries.'],
+  [<LockKeyhole size={24} />, 'Sensitive data control', 'PII redaction hooks and retention policies keep logs useful without exposing secrets.'],
+  [<KeyRound size={24} />, 'Keyed API access', 'Every ingestion endpoint is designed for API-key authentication and audit-friendly ownership.'],
+  [<ServerCog size={24} />, 'Operational hardening', 'Health checks, rate limits, and alert deduplication reduce noisy failures during incidents.'],
+];
+
+export const Features = () => (
+  <section className="page">
+    <div className="container">
+      <PageHeader
+        title="Everything needed to see, score, and resolve log anomalies."
+        subtitle="A complete operations surface for ingestion, machine-learning detection, live dashboards, and response workflows."
+      />
+      <div className="feature-grid">
+        {features.map(([icon, title, desc]) => (
+          <FeatureCard key={title} icon={icon} title={title} desc={desc} />
+        ))}
+      </div>
     </div>
-  </div>
+  </section>
+);
+
+export const Workflow = () => (
+  <section className="page">
+    <div className="container">
+      <PageHeader
+        title="From raw service log to actionable incident."
+        subtitle="LogSentinel keeps the pipeline clear: collect, validate, stream, score, alert, investigate."
+      />
+      <div className="workflow-list">
+        {workflow.map(([num, title, desc]) => (
+          <article className="workflow-step" key={title}>
+            <span className="step-num">{num}</span>
+            <div>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </div>
+            <ArrowRight size={22} />
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+export const Security = () => (
+  <section className="page">
+    <div className="container">
+      <PageHeader
+        title="Security controls for high-volume operational data."
+        subtitle="LogSentinel is designed around protected ingestion, scoped access, safer retention, and reliable incident handling."
+      />
+      <div className="feature-grid">
+        {security.map(([icon, title, desc]) => (
+          <FeatureCard key={title} icon={icon} title={title} desc={desc} />
+        ))}
+      </div>
+      <div className="workflow-list" style={{ marginTop: 24 }}>
+        <article className="workflow-step">
+          <span className="icon-box">
+            <GitBranch size={24} />
+          </span>
+          <div>
+            <h3>Recommended deployment path</h3>
+            <p>
+              Put ingestion behind your API gateway, issue per-service API keys,
+              keep Kafka private, and expose the dashboard through your existing
+              SSO boundary.
+            </p>
+          </div>
+          <WorkflowIcon size={24} />
+        </article>
+        <article className="workflow-step">
+          <span className="icon-box">
+            <Zap size={24} />
+          </span>
+          <div>
+            <h3>Incident response posture</h3>
+            <p>
+              Critical anomalies stay visible in the dashboard and console while
+              alert webhooks carry the service, score, timestamp, and related log context.
+            </p>
+          </div>
+          <ShieldCheck size={24} />
+        </article>
+      </div>
+    </div>
+  </section>
 );

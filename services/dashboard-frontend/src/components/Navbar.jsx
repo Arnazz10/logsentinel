@@ -1,40 +1,64 @@
-import React from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Shield, Terminal, ArrowRight } from 'lucide-react';
+import { Activity, BookOpen, Menu, Terminal, X } from 'lucide-react';
+
+const links = [
+  { to: '/features', label: 'Features' },
+  { to: '/workflow', label: 'Workflow' },
+  { to: '/security', label: 'Security' },
+  { to: '/dashboard', label: 'Dashboard' },
+];
 
 const Navbar = () => {
+  const [open, setOpen] = useState(false);
   const location = useLocation();
-  const isActive = (path) => location.pathname === path;
+
+  const close = () => setOpen(false);
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 py-6">
+    <nav className="nav" aria-label="Primary navigation">
       <div className="container">
-        <div className="glass rounded-[2rem] px-8 py-4 flex items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-full bg-accent-red" />
-            <span className="text-xl font-bold tracking-tight text-white">LogSentinel</span>
+        <div className={`nav-inner ${open ? 'open' : ''}`}>
+          <Link to="/" className="brand" onClick={close}>
+            <span className="brand-dot" aria-hidden="true" />
+            <span>LogSentinel</span>
           </Link>
 
-          {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-8">
-            <NavLink to="/features" active={isActive('/features')}>Features</NavLink>
-            <NavLink to="/workflow" active={isActive('/workflow')}>Workflow</NavLink>
-            <NavLink to="/security" active={isActive('/security')}>Security</NavLink>
-            <NavLink to="/dashboard" active={isActive('/dashboard')}>Dashboard</NavLink>
+          <button
+            className="mobile-toggle"
+            type="button"
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+
+          <div className="nav-links">
+            {links.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                onClick={close}
+                className={`nav-link ${location.pathname === link.to ? 'active' : ''}`}
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-4">
-            <Link 
-              to="/api-docs" 
-              className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-white transition-colors"
-            >
+          <div className="nav-actions">
+            <Link to="/api-docs" className="nav-action" onClick={close}>
+              <BookOpen size={16} />
               API Docs
             </Link>
-            <Link to="/console" className="btn-primary py-2 px-6 text-sm">
+            <Link to="/console" className="nav-action primary" onClick={close}>
+              <Terminal size={16} />
               Open Console
+            </Link>
+            <Link to="/dashboard" className="nav-action" onClick={close}>
+              <Activity size={16} />
+              Live
             </Link>
           </div>
         </div>
@@ -42,14 +66,5 @@ const Navbar = () => {
     </nav>
   );
 };
-
-const NavLink = ({ to, children, active }) => (
-  <Link 
-    to={to} 
-    className={`nav-link ${active ? 'active' : ''}`}
-  >
-    {children}
-  </Link>
-);
 
 export default Navbar;

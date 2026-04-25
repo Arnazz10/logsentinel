@@ -1,85 +1,164 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { BookOpen, Copy, Terminal, Link2, Code2, ShieldCheck, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ChevronRight, Copy, KeyRound, ShieldCheck, Zap } from 'lucide-react';
 
-const ApiDocs = () => {
-  return (
-    <div className="pt-32 pb-20 container">
-      <div className="flex flex-col lg:flex-row gap-12">
-        {/* Sidebar */}
-        <div className="lg:w-64 shrink-0">
-          <div className="sticky top-40 space-y-2">
-            <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-4 px-4">Endpoints</h3>
-            <DocLink active>POST /ingest</DocLink>
-            <DocLink>POST /ingest/batch</DocLink>
-            <DocLink>GET /health</DocLink>
-            <DocLink>GET /metrics</DocLink>
-            <DocLink>POST /predict</DocLink>
-            <DocLink>GET /logs</DocLink>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 max-w-3xl">
-          <h1 className="text-5xl font-bold text-white mb-6">API Documentation</h1>
-          <p className="text-xl text-text-secondary mb-12">
-            Integration instructions for the LogSentinel ingestion and inference engine.
-          </p>
-
-          <section className="mb-16">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <Zap className="text-accent-red" /> Single Log Ingestion
-            </h2>
-            <div className="glass rounded-2xl p-6 mb-8 border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 bg-green-500/10 text-green-500 text-xs font-bold rounded-md">POST</span>
-                  <code className="text-text-primary text-sm font-mono">/ingest</code>
-                </div>
-                <button className="text-text-muted hover:text-white transition-colors">
-                  <Copy size={16} />
-                </button>
-              </div>
-              <p className="text-text-secondary text-sm mb-6">
-                Send a single structured log entry to the ingestion pipeline.
-              </p>
-
-              <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-text-secondary border border-white/5">
-                <pre>{`{
+const endpoints = [
+  {
+    id: 'ingest',
+    method: 'POST',
+    path: '/ingest',
+    title: 'Single log ingestion',
+    body: 'Send one structured log event into the LogSentinel ingestion pipeline.',
+    request: `{
   "service": "auth-service",
   "level": "ERROR",
-  "message": "Connection timeout",
-  "response_time_ms": 4500.0,
+  "message": "Database connection timeout after 5000ms",
+  "response_time_ms": 4500,
   "error_code": 503,
-  "host": "pod-abc123"
-}`}</pre>
-              </div>
-            </div>
-          </section>
+  "host": "pod-auth-7f9d"
+}`,
+    response: `{
+  "accepted": true,
+  "topic": "raw-logs",
+  "event_id": "evt_01HVK8ZQ3A9"
+}`,
+  },
+  {
+    id: 'batch',
+    method: 'POST',
+    path: '/ingest/batch',
+    title: 'Batch ingestion',
+    body: 'Submit multiple log records in one request for high-throughput services.',
+    request: `{
+  "records": [
+    { "service": "gateway", "level": "INFO", "message": "GET /health 200" },
+    { "service": "payment", "level": "WARN", "message": "Retry storm detected" }
+  ]
+}`,
+    response: `{
+  "accepted": 2,
+  "rejected": 0,
+  "topic": "raw-logs"
+}`,
+  },
+  {
+    id: 'health',
+    method: 'GET',
+    path: '/health',
+    title: 'Service health',
+    body: 'Check API, Kafka, model, and storage readiness before sending traffic.',
+    request: `curl -H "X-API-KEY: ls_prod_..." https://api.logsentinel.local/health`,
+    response: `{
+  "status": "ok",
+  "kafka": "connected",
+  "model": "loaded",
+  "latency_ms": 18
+}`,
+  },
+  {
+    id: 'predict',
+    method: 'POST',
+    path: '/predict',
+    title: 'Anomaly prediction',
+    body: 'Score a log-like payload against the current Isolation Forest model without storing it.',
+    request: `{
+  "service": "checkout",
+  "level": "WARN",
+  "message": "p95 latency crossed 1200ms",
+  "response_time_ms": 1200
+}`,
+    response: `{
+  "anomaly": true,
+  "score": -0.083,
+  "severity": "warning"
+}`,
+  },
+];
 
-          <section className="mb-16">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <Code2 className="text-accent-orange" /> Authentication
-            </h2>
-            <p className="text-text-secondary mb-6">
-              All requests must include your organization's API key in the header. You can find your key in the <span className="text-white font-medium">Security</span> tab of the console.
+const ApiDocs = () => {
+  const [active, setActive] = useState(endpoints[0].id);
+  const [copied, setCopied] = useState('');
+  const activeEndpoint = endpoints.find((endpoint) => endpoint.id === active) ?? endpoints[0];
+
+  const copy = async (text, id) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(''), 1200);
+  };
+
+  return (
+    <section className="page">
+      <div className="container doc-layout">
+        <aside className="doc-sidebar">
+          <h3>Endpoints</h3>
+          {endpoints.map((endpoint) => (
+            <button
+              className={`doc-link ${active === endpoint.id ? 'active' : ''}`}
+              key={endpoint.id}
+              type="button"
+              onClick={() => setActive(endpoint.id)}
+            >
+              <span>{endpoint.method} {endpoint.path}</span>
+              <ChevronRight size={15} />
+            </button>
+          ))}
+        </aside>
+
+        <div className="doc-content">
+          <header className="page-header" style={{ textAlign: 'left', marginInline: 0 }}>
+            <p className="eyebrow">API Docs</p>
+            <h1>Integrate LogSentinel with your services.</h1>
+            <p>
+              These endpoints cover ingestion, batch submission, health checks,
+              metrics, log retrieval, and anomaly scoring for the local platform.
             </p>
-            <div className="bg-black/50 rounded-xl p-4 font-mono text-xs text-text-primary border border-white/5">
-              <code>X-API-KEY: ls_prod_842k_...</code>
+          </header>
+
+          <article className="doc-card">
+            <div className="endpoint-line">
+              <div>
+                <span className="method">{activeEndpoint.method}</span>
+                <code> {activeEndpoint.path}</code>
+              </div>
+              <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.request, `${active}-request`)}>
+                {copied === `${active}-request` ? <Check size={17} /> : <Copy size={17} />}
+              </button>
             </div>
-          </section>
+            <h3>{activeEndpoint.title}</h3>
+            <p>{activeEndpoint.body}</p>
+            <pre className="code-block">{activeEndpoint.request}</pre>
+          </article>
+
+          <article className="doc-card">
+            <div className="endpoint-line">
+              <h3>Example response</h3>
+              <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.response, `${active}-response`)}>
+                {copied === `${active}-response` ? <Check size={17} /> : <Copy size={17} />}
+              </button>
+            </div>
+            <pre className="code-block">{activeEndpoint.response}</pre>
+          </article>
+
+          <div className="feature-grid">
+            <article className="feature-card">
+              <span className="icon-box"><KeyRound size={23} /></span>
+              <h3>Authentication</h3>
+              <p>Send `X-API-KEY` with every request. Use separate keys per service so ingestion can be audited and revoked safely.</p>
+            </article>
+            <article className="feature-card">
+              <span className="icon-box"><Zap size={23} /></span>
+              <h3>Throughput</h3>
+              <p>Use `/ingest/batch` for workers that emit many logs per second. Keep batches small enough to retry safely.</p>
+            </article>
+            <article className="feature-card">
+              <span className="icon-box"><ShieldCheck size={23} /></span>
+              <h3>Validation</h3>
+              <p>Unknown fields are preserved as metadata, while service, level, message, host, and timestamp stay normalized.</p>
+            </article>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };
-
-const DocLink = ({ children, active }) => (
-  <div className={`px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-    active ? 'bg-accent-red/10 text-accent-red' : 'text-text-secondary hover:text-white hover:bg-white/5'
-  }`}>
-    {children}
-  </div>
-);
 
 export default ApiDocs;

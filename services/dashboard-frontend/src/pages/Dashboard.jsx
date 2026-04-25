@@ -1,177 +1,189 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, Shield, Terminal, Search, Filter, Download, Trash2, RefreshCcw, Bell, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  Activity,
+  AlertTriangle,
+  Bell,
+  Database,
+  Download,
+  RefreshCcw,
+  Search,
+  ShieldCheck,
+  Terminal,
+  Trash2,
+} from 'lucide-react';
+
+const seedLogs = [
+  { id: 1, time: '19:23:01', service: 'auth-api', level: 'INFO', msg: 'User login successful for user_842', anomaly: false },
+  { id: 2, time: '19:23:04', service: 'payment-svc', level: 'ERROR', msg: 'Stripe API timeout after 10s', anomaly: true },
+  { id: 3, time: '19:23:05', service: 'gateway', level: 'WARN', msg: 'High latency detected on /v1/ingest', anomaly: false },
+  { id: 4, time: '19:23:10', service: 'db-master', level: 'INFO', msg: 'Replica lag synchronized', anomaly: false },
+  { id: 5, time: '19:23:12', service: 'ml-engine', level: 'INFO', msg: 'Inference batch complete for 2,000 records', anomaly: false },
+  { id: 6, time: '19:23:15', service: 'alert-mgr', level: 'ERROR', msg: 'Slack webhook failed with 403 Forbidden', anomaly: true },
+  { id: 7, time: '19:23:18', service: 'checkout', level: 'WARN', msg: 'Retry storm detected against billing provider', anomaly: true },
+  { id: 8, time: '19:23:22', service: 'edge-proxy', level: 'INFO', msg: 'GET /api/v1/health returned 200', anomaly: false },
+];
+
+const services = ['all', 'auth-api', 'payment-svc', 'gateway', 'db-master', 'ml-engine', 'alert-mgr', 'checkout', 'edge-proxy'];
+
+const Kpi = ({ icon, label, value }) => (
+  <div className="kpi">
+    <div className="kpi-icon">{icon}</div>
+    <span className="kpi-label">{label}</span>
+    <span className="kpi-value">{value}</span>
+  </div>
+);
+
+const AlertCard = ({ title, body, time, severity }) => (
+  <article className="alert-card">
+    <h3>
+      <span>{title}</span>
+      <span className={`level-${severity}`}>{severity.toUpperCase()}</span>
+    </h3>
+    <p>{body}</p>
+    <div className="alert-meta">{time}</div>
+  </article>
+);
 
 const Dashboard = () => {
-  const [logs, setLogs] = useState([]);
-  const [stats, setStats] = useState({
-    total: 124502,
-    anomalies: 42,
-    throughput: "850/s",
-    health: "99.9%"
-  });
+  const [logs, setLogs] = useState(seedLogs);
+  const [query, setQuery] = useState('');
+  const [service, setService] = useState('all');
+  const [onlyAnomalies, setOnlyAnomalies] = useState(false);
 
-  // Simulation for live logs
-  useEffect(() => {
-    const mockLogs = [
-      { id: 1, time: '19:23:01', service: 'auth-api', level: 'INFO', msg: 'User login successful: user_842', anomaly: false },
-      { id: 2, time: '19:23:04', service: 'payment-svc', level: 'ERROR', msg: 'Stripe API timeout after 10s', anomaly: true },
-      { id: 3, time: '19:23:05', service: 'gateway', level: 'WARN', msg: 'High latency detected on /v1/ingest', anomaly: false },
-      { id: 4, time: '19:23:10', service: 'db-master', level: 'INFO', msg: 'Replica lag synchronized', anomaly: false },
-      { id: 5, time: '19:23:12', service: 'ml-engine', level: 'INFO', msg: 'Inference batch complete (200 records)', anomaly: false },
-      { id: 6, time: '19:23:15', service: 'alert-mgr', level: 'ERROR', msg: 'Slack webhook failed: 403 Forbidden', anomaly: true },
+  const filteredLogs = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return logs.filter((log) => {
+      const matchesQuery = !normalized || `${log.service} ${log.level} ${log.msg}`.toLowerCase().includes(normalized);
+      const matchesService = service === 'all' || log.service === service;
+      const matchesAnomaly = !onlyAnomalies || log.anomaly;
+      return matchesQuery && matchesService && matchesAnomaly;
+    });
+  }, [logs, onlyAnomalies, query, service]);
+
+  const addLiveLog = () => {
+    const pool = [
+      ['gateway', 'INFO', 'Steady request flow observed across rolling window', false],
+      ['auth-api', 'ERROR', 'Session validator rejected expired signing key', true],
+      ['ml-engine', 'INFO', 'Anomaly batch scored in 18ms', false],
+      ['payment-svc', 'WARN', 'Upstream billing p95 latency crossed 800ms', true],
     ];
-    setLogs(mockLogs);
+    const [nextService, level, msg, anomaly] = pool[Math.floor(Math.random() * pool.length)];
+    const now = new Date().toLocaleTimeString('en-US', { hour12: false });
+    setLogs((current) => [{ id: Date.now(), time: now, service: nextService, level, msg, anomaly }, ...current].slice(0, 40));
+  };
 
-    const interval = setInterval(() => {
-      const newLog = {
-        id: Date.now(),
-        time: new Date().toLocaleTimeString(),
-        service: ['auth-api', 'gateway', 'payment-svc', 'db-master'][Math.floor(Math.random() * 4)],
-        level: ['INFO', 'INFO', 'INFO', 'WARN', 'ERROR'][Math.floor(Math.random() * 5)],
-        msg: 'Live stream telemetry data point ' + Math.floor(Math.random() * 1000),
-        anomaly: Math.random() > 0.9
-      };
-      setLogs(prev => [newLog, ...prev].slice(0, 50));
-    }, 3000);
+  const clearLogs = () => setLogs([]);
+  const exportLogs = () => {
+    const payload = filteredLogs.map((log) => JSON.stringify(log)).join('\n');
+    const blob = new Blob([payload], { type: 'application/x-ndjson' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'logsentinel-logs.ndjson';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
-    return () => clearInterval(interval);
-  }, []);
+  const anomalyCount = logs.filter((log) => log.anomaly).length;
 
   return (
-    <div className="pt-32 pb-20 container">
-      <div className="flex flex-col gap-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+    <section className="page">
+      <div className="container dashboard-grid">
+        <header className="dashboard-header">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Operations Center</h1>
-            <p className="text-text-secondary">Real-time log analysis and anomaly detection</p>
+            <p className="eyebrow">Dashboard</p>
+            <h1>Operations Center</h1>
+            <p>Real-time logs, anomaly scoring, service health, and alert context.</p>
           </div>
-          <div className="flex gap-3">
-            <button className="btn-secondary flex items-center gap-2 py-2 px-4">
-              <Download className="w-4 h-4" /> Export
+          <div className="row-actions">
+            <button className="pill-button" type="button" onClick={exportLogs}>
+              <Download size={18} />
+              Export logs
             </button>
-            <button className="btn-primary py-2 px-6">
-              Connect New Source
+            <button className="pill-button primary" type="button" onClick={addLiveLog}>
+              <RefreshCcw size={18} />
+              Pull live event
             </button>
           </div>
+        </header>
+
+        <div className="kpi-grid">
+          <Kpi icon={<Activity size={24} />} label="Ingestion rate" value="850/s" />
+          <Kpi icon={<ShieldCheck size={24} />} label="Service health" value="99.9%" />
+          <Kpi icon={<AlertTriangle size={24} />} label="Active anomalies" value={anomalyCount} />
+          <Kpi icon={<Database size={24} />} label="Total records" value="152,640" />
         </div>
 
-        {/* Top Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <StatCard icon={<Activity />} label="Ingestion Rate" value={stats.throughput} color="text-blue-500" />
-          <StatCard icon={<Shield />} label="Security Health" value={stats.health} color="text-green-500" />
-          <StatCard icon={<AlertTriangle />} label="Active Anomalies" value={stats.anomalies} color="text-red-500" />
-          <StatCard icon={<Database />} label="Total Records" value={stats.total.toLocaleString()} color="text-purple-500" />
-        </div>
-
-        {/* Main Console Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Logs Stream */}
-          <div className="lg:col-span-2 glass rounded-3xl p-6 flex flex-col h-[600px]">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Terminal className="w-5 h-5 text-accent-red" />
-                <h2 className="text-lg font-semibold text-white">System Logs</h2>
-              </div>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input 
-                    type="text" 
-                    placeholder="Search logs..." 
-                    className="bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent-red transition-all w-64"
+        <div className="ops-grid">
+          <section className="panel">
+            <div className="panel-head">
+              <h2>
+                <Terminal size={20} /> System logs
+              </h2>
+              <div className="toolbar">
+                <label className="search-box">
+                  <Search size={16} />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search logs"
+                    aria-label="Search logs"
                   />
-                </div>
-                <button className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                  <Filter className="w-4 h-4 text-text-secondary" />
+                </label>
+                <select className="select-input" value={service} onChange={(event) => setService(event.target.value)}>
+                  {services.map((name) => (
+                    <option key={name} value={name}>
+                      {name === 'all' ? 'All services' : name}
+                    </option>
+                  ))}
+                </select>
+                <button className="icon-button" type="button" onClick={() => setOnlyAnomalies((value) => !value)} aria-label="Toggle anomalies">
+                  <AlertTriangle size={17} color={onlyAnomalies ? 'var(--orange)' : 'currentColor'} />
+                </button>
+                <button className="icon-button" type="button" onClick={clearLogs} aria-label="Clear logs">
+                  <Trash2 size={17} />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-2 space-y-2 font-mono text-xs">
-              {logs.map(log => (
-                <div 
-                  key={log.id} 
-                  className={`grid grid-cols-[100px_120px_80px_1fr] gap-4 p-3 rounded-lg border transition-colors ${
-                    log.anomaly ? 'bg-red-500/10 border-red-500/20' : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.05]'
-                  }`}
-                >
-                  <span className="text-text-muted">{log.time}</span>
-                  <span className="font-bold text-text-secondary">[{log.service}]</span>
-                  <span className={`font-bold ${log.level === 'ERROR' ? 'text-red-500' : log.level === 'WARN' ? 'text-yellow-500' : 'text-green-500'}`}>
-                    {log.level}
-                  </span>
-                  <span className="text-text-primary flex items-center justify-between">
-                    {log.msg}
-                    {log.anomaly && <span className="bg-red-500 text-white text-[0.6rem] px-2 py-0.5 rounded-full animate-pulse">ANOMALY</span>}
-                  </span>
+            <div className="log-table" aria-live="polite">
+              {filteredLogs.length === 0 ? (
+                <div className="log-row">
+                  <span>No logs match the current filters.</span>
                 </div>
-              ))}
+              ) : (
+                filteredLogs.map((log) => (
+                  <div className={`log-row ${log.anomaly ? 'anomaly' : ''}`} key={log.id}>
+                    <span className="log-time">{log.time}</span>
+                    <span className="log-service">[{log.service}]</span>
+                    <strong className={`level-${log.level.toLowerCase()}`}>{log.level}</strong>
+                    <span>{log.msg}</span>
+                    {log.anomaly ? <span className="mini-chip">ANOMALY</span> : <span />}
+                  </div>
+                ))
+              )}
             </div>
-          </div>
+          </section>
 
-          {/* Side Panel: Active Alerts */}
-          <div className="glass rounded-3xl p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Bell className="w-5 h-5 text-accent-orange" />
-              <h2 className="text-lg font-semibold text-white">Active Alerts</h2>
+          <aside className="panel">
+            <div className="panel-head">
+              <h2>
+                <Bell size={20} /> Active alerts
+              </h2>
+              <span className="status-pill">Live</span>
             </div>
-
-            <div className="space-y-4">
-              <AlertItem 
-                type="CRITICAL" 
-                title="Potential Brute Force" 
-                msg="Multiple failed logins from 192.168.1.45" 
-                time="2m ago" 
-              />
-              <AlertItem 
-                type="WARNING" 
-                title="High Consumer Lag" 
-                msg="Log Processor lag exceeded 50,000 records" 
-                time="15m ago" 
-              />
-              <AlertItem 
-                type="INFO" 
-                title="Model Retrained" 
-                msg="Isolation Forest model updated with latest dataset" 
-                time="1h ago" 
-              />
+            <div className="alert-list">
+              <AlertCard severity="error" title="Potential brute force" body="Multiple failed logins from the same network block." time="2m ago" />
+              <AlertCard severity="warn" title="High consumer lag" body="Kafka consumer lag exceeded 50,000 records on raw-logs." time="15m ago" />
+              <AlertCard severity="info" title="Model refreshed" body="Isolation Forest baseline updated with the latest rolling dataset." time="1h ago" />
             </div>
-
-            <button className="w-full mt-6 py-3 rounded-xl border border-dashed border-white/10 text-text-muted hover:text-white hover:border-white/20 transition-all text-sm">
-              View Alert History
+            <button className="pill-button" type="button" style={{ width: '100%', marginTop: 18 }}>
+              View alert history
             </button>
-          </div>
+          </aside>
         </div>
       </div>
-    </div>
-  );
-};
-
-const StatCard = ({ icon, label, value, color }) => (
-  <div className="glass rounded-2xl p-6 border-white/5">
-    <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 ${color}`}>
-      {React.cloneElement(icon, { size: 20 })}
-    </div>
-    <span className="text-sm font-medium text-text-muted uppercase tracking-wider">{label}</span>
-    <h3 className="text-3xl font-bold text-white mt-1">{value}</h3>
-  </div>
-);
-
-const AlertItem = ({ type, title, msg, time }) => {
-  const colors = type === 'CRITICAL' ? 'bg-red-500' : type === 'WARNING' ? 'bg-orange-500' : 'bg-blue-500';
-  return (
-    <div className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/[0.08] transition-all group">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${colors}`} />
-          <span className="text-xs font-bold text-white">{title}</span>
-        </div>
-        <span className="text-[0.7rem] text-text-muted">{time}</span>
-      </div>
-      <p className="text-[0.8rem] text-text-secondary leading-relaxed">{msg}</p>
-    </div>
+    </section>
   );
 };
 
