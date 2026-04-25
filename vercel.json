@@ -1,18 +1,7 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "services/dashboard-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "services/dashboard-frontend/$1"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "rootDirectory": "services/dashboard-frontend"
 }
