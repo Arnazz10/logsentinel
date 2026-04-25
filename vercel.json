@@ -1,0 +1,11 @@
+{
+  "installCommand": "cd services/dashboard-frontend && npm ci",
+  "buildCommand": "cd services/dashboard-frontend && npm run build",
+  "outputDirectory": "services/dashboard-frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

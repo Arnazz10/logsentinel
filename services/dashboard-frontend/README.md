@@ -1,16 +1,30 @@
-# React + Vite
+# LogSentinel Dashboard Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite frontend for the LogSentinel operations dashboard.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm ci
+npm run dev
+```
 
-## React Compiler
+## Build
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm run build
+```
 
-## Expanding the ESLint configuration
+## Deploy on Vercel
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+The repository root includes `vercel.json`, so importing the GitHub repo into
+Vercel can deploy this frontend directly.
+
+Use these settings if Vercel asks for them:
+
+- Framework Preset: `Vite`
+- Install Command: `cd services/dashboard-frontend && npm ci`
+- Build Command: `cd services/dashboard-frontend && npm run build`
+- Output Directory: `services/dashboard-frontend/dist`
+
+The root `.vercelignore` uploads only this frontend and the Vercel config.
