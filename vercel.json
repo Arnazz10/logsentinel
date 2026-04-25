@@ -1,11 +1,18 @@
 {
-  "installCommand": "cd services/dashboard-frontend && npm ci",
-  "buildCommand": "cd services/dashboard-frontend && npm run build",
-  "outputDirectory": "services/dashboard-frontend/dist",
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "services/dashboard-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "services/dashboard-frontend/$1"
     }
   ]
 }
