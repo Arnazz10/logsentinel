@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, BookOpen, Menu, Terminal, X } from 'lucide-react';
+import { Activity, BookOpen, Github, Menu, Terminal, X } from 'lucide-react';
 
 const links = [
   { to: '/features', label: 'Features' },
   { to: '/workflow', label: 'Workflow' },
   { to: '/security', label: 'Security' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: 'https://github.com/Arnazz10/logsentinel', label: 'GitHub', external: true },
 ];
 
 const Navbar = () => {
@@ -36,14 +37,27 @@ const Navbar = () => {
 
           <div className="nav-links">
             {links.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={close}
-                className={`nav-link ${location.pathname === link.to ? 'active' : ''}`}
-              >
-                {link.label}
-              </Link>
+              link.external ? (
+                <a
+                  key={link.to}
+                  href={link.to}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="nav-link"
+                >
+                  <Github size={16} />
+                  {link.label}
+                </a>
+              ) : (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={close}
+                  className={`nav-link ${location.pathname === link.to ? 'active' : ''}`}
+                >
+                  {link.label}
+                </Link>
+              )
             ))}
           </div>
 

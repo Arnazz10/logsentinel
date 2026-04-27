@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Activity,
   AlertTriangle,
   Bell,
+  Cpu,
   Database,
   Download,
   RefreshCcw,
@@ -49,6 +51,8 @@ const Dashboard = () => {
   const [query, setQuery] = useState('');
   const [service, setService] = useState('all');
   const [onlyAnomalies, setOnlyAnomalies] = useState(false);
+  const [isMlRunning, setIsMlRunning] = useState(false);
+  const [mlResult, setMlResult] = useState(null);
 
   const filteredLogs = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -84,6 +88,20 @@ const Dashboard = () => {
     URL.revokeObjectURL(url);
   };
 
+  const runMlInference = () => {
+    setIsMlRunning(true);
+    setMlResult(null);
+    setTimeout(() => {
+      setIsMlRunning(false);
+      setMlResult({
+        score: (0.85 + Math.random() * 0.14).toFixed(4),
+        status: Math.random() > 0.9 ? 'ANOMALY' : 'NORMAL',
+        timestamp: new Date().toISOString(),
+      });
+      addLiveLog();
+    }, 2000);
+  };
+
   const anomalyCount = logs.filter((log) => log.anomaly).length;
 
   return (
@@ -100,12 +118,37 @@ const Dashboard = () => {
               <Download size={18} />
               Export logs
             </button>
+            <button 
+              className={`pill-button ${isMlRunning ? 'loading' : ''}`} 
+              type="button" 
+              onClick={runMlInference}
+              disabled={isMlRunning}
+            >
+              <Cpu size={18} className={isMlRunning ? 'spin' : ''} />
+              {isMlRunning ? 'Analyzing...' : 'Run ML Inference'}
+            </button>
             <button className="pill-button primary" type="button" onClick={addLiveLog}>
               <RefreshCcw size={18} />
               Pull live event
             </button>
           </div>
         </header>
+
+        {mlResult && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="ml-result-banner"
+          >
+            <div className="ml-result-content">
+              <Cpu size={20} />
+              <span><strong>ML Insight:</strong> Last batch scored <strong>{mlResult.score}</strong>. Result: 
+                <span className={`status-tag ${mlResult.status.toLowerCase()}`}> {mlResult.status}</span>
+              </span>
+            </div>
+            <button className="close-btn" onClick={() => setMlResult(null)}>×</button>
+          </motion.div>
+        )}
 
         <div className="kpi-grid">
           <Kpi icon={<Activity size={24} />} label="Ingestion rate" value="850/s" />
@@ -182,6 +225,32 @@ const Dashboard = () => {
             </button>
           </aside>
         </div>
+
+        <section className="panel terminal-panel">
+          <div className="panel-head">
+            <h2><Terminal size={20} /> Real-time Live Stream</h2>
+            <div className="terminal-dots">
+              <span className="dot red"></span>
+              <span className="dot yellow"></span>
+              <span className="dot green"></span>
+            </div>
+          </div>
+          <div className="terminal-body">
+            {logs.slice(0, 10).map((log, i) => (
+              <div key={log.id} className="terminal-line" style={{ opacity: 1 - i * 0.1 }}>
+                <span className="term-time">[{log.time}]</span>
+                <span className="term-prompt">user@logsentinel:~$</span>
+                <span className="term-cmd">ingest --service {log.service} --level {log.level}</span>
+                <div className="term-output">
+                  <span className={`term-status ${log.level.toLowerCase()}`}>{log.level}</span>
+                  <span>{log.msg}</span>
+                  {log.anomaly && <span className="term-anomaly"> [!! ANOMALY DETECTED !!]</span>}
+                </div>
+              </div>
+            ))}
+            <div className="terminal-cursor">_</div>
+          </div>
+        </section>
       </div>
     </section>
   );

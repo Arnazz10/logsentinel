@@ -54,7 +54,7 @@ const Footer = () => (
             <Link className="icon-button" to="/console" aria-label="Console">
               <Terminal size={18} />
             </Link>
-            <a className="icon-button" href="https://github.com/" aria-label="Source repository">
+            <a className="icon-button" href="https://github.com/Arnazz10/logsentinel" aria-label="Source repository">
               <Code2 size={18} />
             </a>
           </div>

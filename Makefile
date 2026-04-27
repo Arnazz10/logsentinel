@@ -157,20 +157,20 @@ lint: ## Run flake8 + black linting checks
 	@echo "$(CYAN)▶ Running linters...$(RESET)"
 	@$(PIP) install flake8 black isort --quiet
 	@echo "$(CYAN)  Running black (format check)...$(RESET)"
-	black --check --diff services/ ml/ tests/
+	$(PYTHON) -m black --check --diff services/ ml/ tests/
 	@echo "$(CYAN)  Running flake8...$(RESET)"
-	flake8 services/ ml/ tests/ \
+	$(PYTHON) -m flake8 services/ ml/ tests/ \
 		--max-line-length=100 \
-		--exclude=__pycache__,.venv,migrations \
+		--exclude=__pycache__,.venv,.venv-ci,node_modules,migrations \
 		--ignore=E203,W503
 	@echo "$(CYAN)  Running isort (import sort check)...$(RESET)"
-	isort --profile black --check-only --diff services/ ml/ tests/
+	$(PYTHON) -m isort --profile black --check-only --diff services/ ml/ tests/
 	@echo "$(GREEN)✔ All lint checks passed.$(RESET)"
 
 format: ## Auto-format code with black + isort
 	@echo "$(CYAN)▶ Formatting code...$(RESET)"
-	black services/ ml/ tests/
-	isort --profile black services/ ml/ tests/
+	$(PYTHON) -m black services/ ml/ tests/
+	$(PYTHON) -m isort --profile black services/ ml/ tests/
 	@echo "$(GREEN)✔ Code formatted.$(RESET)"
 
 # -----------------------------------------------------------------------------
