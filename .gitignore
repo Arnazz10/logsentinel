@@ -30,3 +30,13 @@ infra/terraform/.terraform/
 .vscode/
 .idea/
 *.swp
+.venv-ci/
+jenkins-cli.jar
+jenkins_job_config.xml
+infra/jenkins/home/
+jenkins.log
+*.log
+test-results/
+.pytest_cache/
+htmlcov/
+coverage.xml
