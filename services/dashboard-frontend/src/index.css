@@ -1321,3 +1321,168 @@ a {
   opacity: 0.7;
   cursor: wait;
 }
+
+/* ---------------------------------------------------------------------------
+   ML Flow Statistics Modal
+   --------------------------------------------------------------------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  width: min(100%, 720px);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.stats-grid-modal {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card-modal {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  padding: 18px;
+  border-radius: 18px;
+  text-align: center;
+}
+
+.stat-label-modal {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.stat-value-modal {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.text-green { color: var(--green); }
+.text-orange { color: var(--orange); }
+.text-blue { color: var(--blue); }
+
+.chart-container-modal {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.chart-container-modal h3 {
+  margin: 0 0 20px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.mock-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 160px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chart-bar-outer {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.chart-bar {
+  width: 100%;
+  background: linear-gradient(to top, var(--orange), var(--red));
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  transition: height 1s ease-out;
+}
+
+.bar-tooltip {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chart-bar:hover .bar-tooltip {
+  opacity: 1;
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.model-info-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 0.65rem;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.info-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   Bell,
   Cpu,
   Database,
@@ -53,6 +54,7 @@ const Dashboard = () => {
   const [onlyAnomalies, setOnlyAnomalies] = useState(false);
   const [isMlRunning, setIsMlRunning] = useState(false);
   const [mlResult, setMlResult] = useState(null);
+  const [showStats, setShowStats] = useState(false);
 
   const filteredLogs = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -127,12 +129,85 @@ const Dashboard = () => {
               <Cpu size={18} className={isMlRunning ? 'spin' : ''} />
               {isMlRunning ? 'Analyzing...' : 'Run ML Inference'}
             </button>
+            <button className="pill-button" type="button" onClick={() => setShowStats(true)}>
+              <BarChart3 size={18} />
+              ML Stats
+            </button>
             <button className="pill-button primary" type="button" onClick={addLiveLog}>
               <RefreshCcw size={18} />
               Pull live event
             </button>
           </div>
         </header>
+
+        {showStats && (
+          <div className="modal-overlay" onClick={() => setShowStats(false)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="modal-content"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2><BarChart3 size={24} /> ML Flow Statistics</h2>
+                <button className="close-btn" onClick={() => setShowStats(false)}>×</button>
+              </div>
+              
+              <div className="stats-grid-modal">
+                <div className="stat-card-modal">
+                  <span className="stat-label-modal">Model Accuracy</span>
+                  <span className="stat-value-modal text-green">98.2%</span>
+                </div>
+                <div className="stat-card-modal">
+                  <span className="stat-label-modal">Precision</span>
+                  <span className="stat-value-modal text-orange">94.5%</span>
+                </div>
+                <div className="stat-card-modal">
+                  <span className="stat-label-modal">Recall</span>
+                  <span className="stat-value-modal text-blue">91.8%</span>
+                </div>
+                <div className="stat-card-modal">
+                  <span className="stat-label-modal">F1 Score</span>
+                  <span className="stat-value-modal">0.931</span>
+                </div>
+              </div>
+              
+              <div className="chart-container-modal">
+                <h3>Anomaly Distribution (Last 24h)</h3>
+                <div className="mock-chart">
+                  {[30, 45, 25, 60, 40, 85, 50, 65, 35, 20, 55, 45].map((h, i) => (
+                    <div key={i} className="chart-bar-outer">
+                      <div className="chart-bar" style={{ height: `${h}%` }}>
+                        <div className="bar-tooltip">{h}%</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="chart-labels">
+                  <span>00:00</span>
+                  <span>08:00</span>
+                  <span>16:00</span>
+                  <span>23:59</span>
+                </div>
+              </div>
+
+              <div className="model-info-footer">
+                <div className="info-item">
+                  <span className="info-label">Active Model:</span>
+                  <span className="info-value">IsolationForest-v2.4-stable</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Last Training:</span>
+                  <span className="info-value">2026-04-27 09:12 UTC</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Dataset Size:</span>
+                  <span className="info-value">1.2M records</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {mlResult && (
           <motion.div 
