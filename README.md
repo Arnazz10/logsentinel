@@ -10,6 +10,10 @@
 
 ---
 
+> **Live Demo →** [logsentinel-log.vercel.app](https://logsentinel-log.vercel.app) &nbsp;|&nbsp; **GitHub** → [Arnazz10/logsentinel](https://github.com/Arnazz10/logsentinel)
+
+---
+
 ## 📖 Overview
 
 **LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards 
@@ -137,7 +141,7 @@ logsentinel/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/logsentinel.git
+git clone https://github.com/Arnazz10/logsentinel.git
 cd logsentinel
 ```
 
