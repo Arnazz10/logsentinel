@@ -55,6 +55,7 @@ const Dashboard = () => {
   const [isMlRunning, setIsMlRunning] = useState(false);
   const [mlResult, setMlResult] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [showFlow, setShowFlow] = useState(false);
 
   const filteredLogs = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -128,6 +129,10 @@ const Dashboard = () => {
             >
               <Cpu size={18} className={isMlRunning ? 'spin' : ''} />
               {isMlRunning ? 'Analyzing...' : 'Run ML Inference'}
+            </button>
+            <button className="pill-button" type="button" onClick={() => setShowFlow(true)}>
+              <Activity size={18} />
+              ML Flow
             </button>
             <button className="pill-button" type="button" onClick={() => setShowStats(true)}>
               <BarChart3 size={18} />
@@ -204,6 +209,56 @@ const Dashboard = () => {
                   <span className="info-label">Dataset Size:</span>
                   <span className="info-value">1.2M records</span>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showFlow && (
+          <div className="modal-overlay" onClick={() => setShowFlow(false)}>
+            <motion.div 
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="modal-content flow-modal"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2><Activity size={24} /> ML Pipeline Architecture</h2>
+                <button className="close-btn" onClick={() => setShowFlow(false)}>×</button>
+              </div>
+              
+              <div className="flow-viz-container">
+                <div className="flow-path">
+                  <div className="flow-step-node">
+                    <div className="node-icon"><Database size={20} /></div>
+                    <span>Log Source</span>
+                  </div>
+                  <div className="flow-connector"></div>
+                  <div className="flow-step-node accent">
+                    <div className="node-icon"><Activity size={20} /></div>
+                    <span>Kafka Stream</span>
+                  </div>
+                  <div className="flow-connector"></div>
+                  <div className="flow-step-node highlight">
+                    <div className="node-icon"><Cpu size={20} /></div>
+                    <span>ML Engine</span>
+                    <small>Isolation Forest</small>
+                  </div>
+                  <div className="flow-connector"></div>
+                  <div className="flow-step-node alert">
+                    <div className="node-icon"><AlertTriangle size={20} /></div>
+                    <span>Anomaly Alert</span>
+                  </div>
+                  <div className="flow-connector"></div>
+                  <div className="flow-step-node">
+                    <div className="node-icon"><Terminal size={20} /></div>
+                    <span>Operator UI</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flow-description">
+                <p>The <strong>LogSentinel ML Flow</strong> processes logs in micro-batches. Each log is vectorised and scored against a baseline model. If a log's isolation score exceeds the <strong>0.85 threshold</strong>, it's immediately flagged as an anomaly and routed to the Active Alerts panel.</p>
               </div>
             </motion.div>
           </div>

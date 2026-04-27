@@ -1486,3 +1486,98 @@ a {
   font-weight: 700;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------------------
+   ML Flow Visualization
+   --------------------------------------------------------------------------- */
+
+.flow-modal {
+  width: min(100%, 960px);
+}
+
+.flow-viz-container {
+  padding: 48px 0;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.flow-path {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 800px;
+}
+
+.flow-step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 120px;
+  text-align: center;
+}
+
+.node-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  transition: all 0.3s;
+}
+
+.flow-step-node span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.flow-step-node small {
+  font-size: 0.65rem;
+  color: var(--dim);
+}
+
+.flow-step-node.accent .node-icon {
+  background: rgba(106, 183, 255, 0.15);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.flow-step-node.highlight .node-icon {
+  background: rgba(255, 112, 72, 0.15);
+  border-color: var(--orange);
+  color: var(--orange);
+  box-shadow: 0 0 30px rgba(255, 112, 72, 0.25);
+}
+
+.flow-step-node.alert .node-icon {
+  background: rgba(255, 79, 79, 0.15);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.flow-connector {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(to right, var(--line), var(--line-strong), var(--line));
+  margin: 0 -10px;
+  position: relative;
+  top: -16px;
+}
+
+.flow-description {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+  border-left: 4px solid var(--orange);
+}
+
+.flow-description p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--muted);
+}
