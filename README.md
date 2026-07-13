@@ -14,7 +14,7 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 **LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards 
 
@@ -22,13 +22,13 @@ Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastru
 
 ---
 
-## 🖼️ Frontend Preview
+## Frontend Preview
 
 ![LogSentinel — Detect the log patterns that break systems before users feel them](docs/images/logsentinel-frontend-preview.png)
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -71,7 +71,7 @@ Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastru
 
 ---
 
-## 🧩 Microservices
+## Microservices
 
 | Service | Port | Description |
 |---|---|---|
@@ -83,7 +83,7 @@ Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastru
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 logsentinel/
@@ -130,7 +130,7 @@ logsentinel/
 
 ---
 
-## 🚀 Quick Start (Local Development)
+## Quick Start (Local Development)
 
 ### Prerequisites
 
@@ -197,7 +197,7 @@ curl -X POST http://localhost:8000/ingest \
 
 ---
 
-## 🤖 Machine Learning
+## Machine Learning
 
 ### Algorithm: Isolation Forest
 
@@ -234,7 +234,7 @@ make evaluate
 
 ---
 
-## 🔧 Makefile Commands
+## Makefile Commands
 
 ```bash
 make up           # Start all services via Docker Compose
@@ -254,7 +254,7 @@ make clean        # Remove containers, volumes, images
 
 ---
 
-## 🏗️ Infrastructure (AWS + Terraform)
+## Infrastructure (AWS + Terraform)
 
 ```bash
 cd infra/terraform
@@ -275,7 +275,7 @@ terraform apply -var-file=terraform.tfvars
 
 ---
 
-## ☸️ Kubernetes Deployment
+## Kubernetes Deployment
 
 ```bash
 # Create namespace
@@ -293,7 +293,7 @@ kubectl get pods -n logsentinel
 
 ---
 
-## 🔄 CI/CD Pipeline (Jenkins)
+## CI/CD Pipeline (Jenkins)
 
 The pipeline triggers on `push` to `main` or any `pull_request`.
 
@@ -326,7 +326,7 @@ Configure Jenkins credentials:
 
 ---
 
-## 📊 Monitoring
+## Monitoring
 
 ### Prometheus Metrics
 
@@ -348,7 +348,7 @@ Each FastAPI service exposes `/metrics` with:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Unit tests
@@ -366,7 +366,7 @@ make test
 
 ---
 
-## 🔐 Security
+## Security
 
 | Layer | Mechanism |
 |---|---|
@@ -380,7 +380,7 @@ make test
 
 ---
 
-## 📋 API Reference
+## API Reference
 
 ### Log Ingestion API (`POST /ingest`)
 
@@ -419,7 +419,7 @@ GET /stats
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
@@ -429,16 +429,16 @@ GET /stats
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## 👥 Authors
+## Authors
 
 - **LogSentinel Team** — Cloud-Native AI Log Monitoring Platform
 
 ---
 
-*Built with ❤️ using FastAPI, Apache Kafka, Scikit-learn, Kubernetes, and Terraform.*
+*Built with using FastAPI, Apache Kafka, Scikit-learn, Kubernetes, and Terraform.*
