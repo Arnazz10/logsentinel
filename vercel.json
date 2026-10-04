@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm ci",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm --prefix services/dashboard-frontend run build",
+  "outputDirectory": "services/dashboard-frontend/dist",
+  "installCommand": "npm --prefix services/dashboard-frontend ci",
   "framework": "vite",
-  "rootDirectory": "services/dashboard-frontend",
-  "nodeVersion": "20.x"
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
