@@ -18,13 +18,62 @@
 
 **LogSentinel** is a production-grade, cloud-native platform that ingests system logs from applications, processes them in real-time through a streaming pipeline, detects anomalies using machine learning, and visualizes system health through live monitoring dashboards 
 
-Everything runs in Docker containers orchestrated by Kubernetes on AWS infrastructure, with a full DevOps CI/CD pipeline powered by Jenkins.
+The backend stack includes Docker, Kubernetes, AWS infrastructure, and a Jenkins CI/CD pipeline. The React frontend can run independently with Vite and is deployed separately on Vercel.
 
 ---
 
 ## Frontend Preview
 
 ![LogSentinel — Detect the log patterns that break systems before users feel them](docs/images/logsentinel-frontend-preview.png)
+
+---
+
+## Frontend Quick Start
+
+Use Node.js 22.12+ or Node.js 24 and npm. Docker is not required to view the frontend.
+
+From the cloned repository root:
+
+```bash
+cd services/dashboard-frontend
+npm ci
+npm run dev
+```
+
+Open the URL printed by Vite, normally http://localhost:5173. The frontend includes home, pipelines, rankings, analytics, settings, dashboard, API documentation, and console pages.
+
+The homepage's animated metrics and pipeline summaries use demo data. Running the frontend alone does not start the Kafka pipeline or backend services.
+
+To build and preview the production frontend from the same directory:
+
+```bash
+npm run build
+npm run preview
+```
+
+The build output is `services/dashboard-frontend/dist` relative to the repository root.
+
+## Vercel Deployment
+
+Live frontend: **https://logsentinel-log.vercel.app/**
+
+Import `Arnazz10/logsentinel` into Vercel, or use the existing `logsentinel` project, with these settings:
+
+| Setting | Value |
+|---|---|
+| Production Branch | `main` |
+| Root Directory | `services/dashboard-frontend` |
+| Framework Preset | `Vite` |
+| Install Command | `npm ci` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Node.js Version | `22.x` or `24.x` |
+
+The deployment config is `services/dashboard-frontend/vercel.json`. Commands and the output directory are relative to Vercel's Root Directory; do not prefix them with `services/dashboard-frontend` again.
+
+The config rewrites application routes to `index.html`, allowing direct links and refreshes on pages such as `/dashboard` and `/settings`. Vercel hosts the frontend only; the backend stack requires a separate deployment.
+
+With the GitHub integration connected, pushing a commit to `main` triggers a production deployment. Check its Build Logs and wait for **Ready** before verifying the live domain.
 
 ---
 
@@ -93,7 +142,8 @@ logsentinel/
 │   ├── log-processor/        # Kafka consumer, cleans logs
 │   ├── ml-engine/            # Isolation Forest model + inference API
 │   ├── alert-service/        # Sends alerts via email/Slack
-│   └── dashboard-backend/    # API for Grafana / frontend
+│   ├── dashboard-backend/    # API for Grafana / frontend
+│   └── dashboard-frontend/   # React + Vite frontend and Vercel config
 ├── infra/
 │   ├── terraform/            # AWS infrastructure as code
 │   ├── kubernetes/           # All K8s YAML manifests
@@ -148,7 +198,7 @@ cd logsentinel
 ### 2. Copy environment variables
 
 ```bash
-cp .env.example .env
+cp env.example .env
 # Edit .env with your Slack webhook, SMTP credentials, etc.
 ```
 
