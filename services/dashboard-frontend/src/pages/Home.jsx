@@ -141,7 +141,7 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
-  const circumference = 2 * Math.PI * 52;
+  const circumference = 2 * Math.PI * 48;
   const scoreOffset = circumference - (score / 10) * circumference;
 
   return (
@@ -431,23 +431,56 @@ export default function Home() {
                       <stop offset="100%" stopColor="#3fd2ff" />
                     </linearGradient>
                   </defs>
-                  <circle cx="60" cy="60" r="52" className="ring-bg" />
+                  <circle cx="60" cy="60" r="48" className="ring-bg" />
                   <circle
                     cx="60"
                     cy="60"
-                    r="52"
+                    r="48"
                     className="ring-fg"
                     strokeDasharray={circumference}
                     strokeDashoffset={scoreOffset}
                   />
                 </svg>
+                {/* Score number only — no sub-label inside the ring */}
                 <div className="ring-center">
-                  <strong>{score.toFixed(1)}</strong>
-                  <span>/ 10.0</span>
+                  <strong style={{ fontSize: "2.8rem", lineHeight: 1 }}>
+                    {score.toFixed(1)}
+                  </strong>
                 </div>
               </div>
+
+              {/* Label sits cleanly below the ring */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  marginTop: 10,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.78rem",
+                    color: "var(--dim)",
+                    fontWeight: 600,
+                  }}
+                >
+                  out of
+                </span>
+                <span
+                  style={{
+                    fontSize: "0.92rem",
+                    color: "var(--muted)",
+                    fontWeight: 700,
+                  }}
+                >
+                  10.0
+                </span>
+              </div>
             </div>
-            <p className="ai-sub">
+
+            <p className="ai-sub" style={{ marginTop: 6 }}>
               <strong>{total}</strong> anomalies resolved ·{" "}
               <strong style={{ color: "var(--green)" }}>Healthy</strong>
             </p>
