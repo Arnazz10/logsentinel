@@ -17,14 +17,15 @@ npm run build
 
 ## Deploy on Vercel
 
-The repository root includes `vercel.json`, so importing the GitHub repo into
-Vercel can deploy this frontend directly.
+The repository root includes `vercel.json`. Set the Vercel project's Root
+Directory to `services/dashboard-frontend` when importing the GitHub repo.
 
 Use these settings if Vercel asks for them:
 
 - Framework Preset: `Vite`
-- Install Command: `cd services/dashboard-frontend && npm ci`
-- Build Command: `cd services/dashboard-frontend && npm run build`
-- Output Directory: `services/dashboard-frontend/dist`
+- Root Directory: `services/dashboard-frontend`
+- Install Command: `npm ci`
+- Build Command: `npm run build`
+- Output Directory: `dist`
 
 The root `.vercelignore` uploads only this frontend and the Vercel config.
