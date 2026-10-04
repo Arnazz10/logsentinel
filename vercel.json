@@ -3,5 +3,6 @@
   "outputDirectory": "dist",
   "installCommand": "npm ci",
   "framework": "vite",
-  "rootDirectory": "services/dashboard-frontend"
+  "rootDirectory": "services/dashboard-frontend",
+  "nodeVersion": "20.x"
 }
