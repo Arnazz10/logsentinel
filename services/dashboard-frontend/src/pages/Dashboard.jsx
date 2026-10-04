@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Terminal,
   Trash2,
+  TrendingDown,
+  TrendingUp,
 } from 'lucide-react';
 
 const seedLogs = [
@@ -28,11 +30,12 @@ const seedLogs = [
 
 const services = ['all', 'auth-api', 'payment-svc', 'gateway', 'db-master', 'ml-engine', 'alert-mgr', 'checkout', 'edge-proxy'];
 
-const Kpi = ({ icon, label, value }) => (
+const Kpi = ({ icon, label, value, delta, deltaDir = 'up' }) => (
   <div className="kpi">
     <div className="kpi-icon">{icon}</div>
     <span className="kpi-label">{label}</span>
     <span className="kpi-value">{value}</span>
+    {delta && <span className={`kpi-delta ${deltaDir}`}>{deltaDir === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {delta}</span>}
   </div>
 );
 
@@ -56,6 +59,12 @@ const Dashboard = () => {
   const [mlResult, setMlResult] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showFlow, setShowFlow] = useState(false);
+  const [kpis, setKpis] = useState({
+    ingest: 850,
+    health: 99.9,
+    anomalies: 3,
+    records: 152640,
+  });
 
   const filteredLogs = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -73,11 +82,33 @@ const Dashboard = () => {
       ['auth-api', 'ERROR', 'Session validator rejected expired signing key', true],
       ['ml-engine', 'INFO', 'Anomaly batch scored in 18ms', false],
       ['payment-svc', 'WARN', 'Upstream billing p95 latency crossed 800ms', true],
+      ['checkout', 'INFO', 'Order #' + Math.floor(Math.random() * 90000 + 10000) + ' completed successfully', false],
+      ['db-master', 'WARN', 'Read replica lag is 2.8s and rising', true],
+      ['edge-proxy', 'INFO', 'Cache hit ratio improved to 94.2%', false],
+      ['alert-mgr', 'INFO', 'PagerDuty webhook delivered successfully', false],
     ];
     const [nextService, level, msg, anomaly] = pool[Math.floor(Math.random() * pool.length)];
     const now = new Date().toLocaleTimeString('en-US', { hour12: false });
-    setLogs((current) => [{ id: Date.now(), time: now, service: nextService, level, msg, anomaly }, ...current].slice(0, 40));
+    setLogs((current) =>
+      [{ id: Date.now() + Math.random(), time: now, service: nextService, level, msg, anomaly }, ...current].slice(0, 60)
+    );
+    if (anomaly) {
+      setKpis((k) => ({ ...k, anomalies: k.anomalies + 1 }));
+    }
   };
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      addLiveLog();
+      setKpis((k) => ({
+        ingest: Math.max(120, Math.min(1400, k.ingest + Math.floor((Math.random() - 0.45) * 60))),
+        health: Math.max(98.5, Math.min(99.999, k.health + (Math.random() - 0.6) * 0.02)),
+        records: k.records + Math.floor(Math.random() * 500),
+      }));
+    }, 2200);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clearLogs = () => setLogs([]);
   const exportLogs = () => {
@@ -121,9 +152,9 @@ const Dashboard = () => {
               <Download size={18} />
               Export logs
             </button>
-            <button 
-              className={`pill-button ${isMlRunning ? 'loading' : ''}`} 
-              type="button" 
+            <button
+              className={`pill-button ${isMlRunning ? 'loading' : ''}`}
+              type="button"
               onClick={runMlInference}
               disabled={isMlRunning}
             >
@@ -147,17 +178,17 @@ const Dashboard = () => {
 
         {showStats && (
           <div className="modal-overlay" onClick={() => setShowStats(false)}>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               className="modal-content"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="modal-header">
                 <h2><BarChart3 size={24} /> ML Flow Statistics</h2>
                 <button className="close-btn" onClick={() => setShowStats(false)}>×</button>
               </div>
-              
+
               <div className="stats-grid-modal">
                 <div className="stat-card-modal">
                   <span className="stat-label-modal">Model Accuracy</span>
@@ -176,7 +207,7 @@ const Dashboard = () => {
                   <span className="stat-value-modal">0.931</span>
                 </div>
               </div>
-              
+
               <div className="chart-container-modal">
                 <h3>Anomaly Distribution (Last 24h)</h3>
                 <div className="mock-chart">
@@ -216,17 +247,17 @@ const Dashboard = () => {
 
         {showFlow && (
           <div className="modal-overlay" onClick={() => setShowFlow(false)}>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               className="modal-content flow-modal"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="modal-header">
                 <h2><Activity size={24} /> ML Pipeline Architecture</h2>
                 <button className="close-btn" onClick={() => setShowFlow(false)}>×</button>
               </div>
-              
+
               <div className="flow-viz-container">
                 <div className="flow-path">
                   <div className="flow-step-node">
@@ -265,14 +296,14 @@ const Dashboard = () => {
         )}
 
         {mlResult && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="ml-result-banner"
           >
             <div className="ml-result-content">
               <Cpu size={20} />
-              <span><strong>ML Insight:</strong> Last batch scored <strong>{mlResult.score}</strong>. Result: 
+              <span><strong>ML Insight:</strong> Last batch scored <strong>{mlResult.score}</strong>. Result:
                 <span className={`status-tag ${mlResult.status.toLowerCase()}`}> {mlResult.status}</span>
               </span>
             </div>
@@ -281,10 +312,10 @@ const Dashboard = () => {
         )}
 
         <div className="kpi-grid">
-          <Kpi icon={<Activity size={24} />} label="Ingestion rate" value="850/s" />
-          <Kpi icon={<ShieldCheck size={24} />} label="Service health" value="99.9%" />
-          <Kpi icon={<AlertTriangle size={24} />} label="Active anomalies" value={anomalyCount} />
-          <Kpi icon={<Database size={24} />} label="Total records" value="152,640" />
+          <Kpi icon={<Activity size={24} />} label="Ingestion rate" value={`${kpis.ingest}/s`} delta="+4.1% vs 1h ago" deltaDir="up" />
+          <Kpi icon={<ShieldCheck size={24} />} label="Service health" value={`${kpis.health.toFixed(2)}%`} delta="-0.02% vs 1h ago" deltaDir="up" />
+          <Kpi icon={<AlertTriangle size={24} />} label="Active anomalies" value={anomalyCount} delta={`${Math.max(0, anomalyCount - 3)} new`} deltaDir={anomalyCount > 3 ? 'down' : 'up'} />
+          <Kpi icon={<Database size={24} />} label="Total records" value={kpis.records.toLocaleString()} delta="+2.1%" deltaDir="up" />
         </div>
 
         <div className="ops-grid">
@@ -325,14 +356,20 @@ const Dashboard = () => {
                   <span>No logs match the current filters.</span>
                 </div>
               ) : (
-                filteredLogs.map((log) => (
-                  <div className={`log-row ${log.anomaly ? 'anomaly' : ''}`} key={log.id}>
+                filteredLogs.map((log, i) => (
+                  <motion.div
+                    className={`log-row ${log.anomaly ? 'anomaly' : ''}`}
+                    key={log.id}
+                    initial={i === 0 ? { opacity: 0, x: -12 } : false}
+                    animate={i === 0 ? { opacity: 1, x: 0 } : false}
+                    transition={{ duration: 0.35 }}
+                  >
                     <span className="log-time">{log.time}</span>
                     <span className="log-service">[{log.service}]</span>
                     <strong className={`level-${log.level.toLowerCase()}`}>{log.level}</strong>
                     <span>{log.msg}</span>
                     {log.anomaly ? <span className="mini-chip">ANOMALY</span> : <span />}
-                  </div>
+                  </motion.div>
                 ))
               )}
             </div>
@@ -365,20 +402,26 @@ const Dashboard = () => {
               <span className="dot green"></span>
             </div>
           </div>
-          <div className="terminal-body">
-            {logs.slice(0, 10).map((log, i) => (
-              <div key={log.id} className="terminal-line" style={{ opacity: 1 - i * 0.1 }}>
-                <span className="term-time">[{log.time}]</span>
-                <span className="term-prompt">user@logsentinel:~$</span>
-                <span className="term-cmd">ingest --service {log.service} --level {log.level}</span>
-                <div className="term-output">
+          <div className="terminal-body live-stream">
+            {logs.slice(0, 12).flatMap((log, i) => (
+              <div key={`g-${log.id}`} className="terminal-line-group" style={{ opacity: 1 - Math.min(0.7, i * 0.06) }}>
+                <div className="term-entry">
+                  <span className="term-time">[{log.time}]</span>
+                  <span className="term-prompt">user@logsentinel:~$</span>
+                  <span className="term-cmd">ingest --service {log.service} --level {log.level}</span>
+                </div>
+                <div className="term-output-group">
+                  <span className="term-time">[{log.time}]</span>
+                  <span className="term-prompt">user@logsentinel:~$</span>
                   <span className={`term-status ${log.level.toLowerCase()}`}>{log.level}</span>
-                  <span>{log.msg}</span>
-                  {log.anomaly && <span className="term-anomaly"> [!! ANOMALY DETECTED !!]</span>}
+                  <span className="term-message">
+                    {log.msg}
+                    {log.anomaly && <span className="term-anomaly blink"> [!! ANOMALY DETECTED !!]</span>}
+                  </span>
                 </div>
               </div>
             ))}
-            <div className="terminal-cursor">_</div>
+            <div className="terminal-cursor blink-cursor">▊</div>
           </div>
         </section>
       </div>

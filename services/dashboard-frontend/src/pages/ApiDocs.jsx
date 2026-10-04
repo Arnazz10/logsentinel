@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Check, ChevronRight, Copy, KeyRound, ShieldCheck, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  Activity,
+  Check,
+  ChevronRight,
+  Copy,
+  KeyRound,
+  ShieldCheck,
+  Terminal,
+  Zap,
+  ArrowRight,
+} from 'lucide-react';
 
 const endpoints = [
   {
@@ -97,26 +109,59 @@ const ApiDocs = () => {
               type="button"
               onClick={() => setActive(endpoint.id)}
             >
-              <span>{endpoint.method} {endpoint.path}</span>
+              <span><span className={`method-pill ${endpoint.method.toLowerCase()}`}>{endpoint.method}</span> {endpoint.path}</span>
               <ChevronRight size={15} />
             </button>
           ))}
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+            <h3 style={{ marginBottom: 10 }}>Platform</h3>
+            {[
+              ['/dashboard', 'Live dashboard', Activity],
+              ['/console', 'Open CLI console', Terminal],
+              ['/features', 'Feature list', Zap],
+              ['/workflow', 'Workflow guide', ArrowRight],
+              ['/security', 'Security posture', ShieldCheck],
+              ['/settings', 'Keys & webhooks', KeyRound],
+            ].map(([to, label, Icon]) => (
+              <Link
+                key={to}
+                to={to}
+                className="doc-link"
+                style={{ textDecoration: 'none' }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <Icon size={13} /> {label}
+                </span>
+                <ChevronRight size={15} />
+              </Link>
+            ))}
+          </div>
         </aside>
 
         <div className="doc-content">
-          <header className="page-header" style={{ textAlign: 'left', marginInline: 0 }}>
+          <motion.header
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="page-header"
+            style={{ textAlign: 'left', marginInline: 0 }}
+          >
             <p className="eyebrow">API Docs</p>
             <h1>Integrate LogSentinel with your services.</h1>
             <p>
               These endpoints cover ingestion, batch submission, health checks,
               metrics, log retrieval, and anomaly scoring for the local platform.
             </p>
-          </header>
+          </motion.header>
 
-          <article className="doc-card">
+          <motion.article
+            key={active + '-req'}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="doc-card panel"
+          >
             <div className="endpoint-line">
               <div>
-                <span className="method">{activeEndpoint.method}</span>
+                <span className={`method-pill ${activeEndpoint.method.toLowerCase()}`}>{activeEndpoint.method}</span>
                 <code> {activeEndpoint.path}</code>
               </div>
               <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.request, `${active}-request`)}>
@@ -126,9 +171,15 @@ const ApiDocs = () => {
             <h3>{activeEndpoint.title}</h3>
             <p>{activeEndpoint.body}</p>
             <pre className="code-block">{activeEndpoint.request}</pre>
-          </article>
+          </motion.article>
 
-          <article className="doc-card">
+          <motion.article
+            key={active + '-resp'}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+            className="doc-card panel"
+          >
             <div className="endpoint-line">
               <h3>Example response</h3>
               <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.response, `${active}-response`)}>
@@ -136,23 +187,26 @@ const ApiDocs = () => {
               </button>
             </div>
             <pre className="code-block">{activeEndpoint.response}</pre>
-          </article>
+          </motion.article>
 
           <div className="feature-grid">
             <article className="feature-card">
               <span className="icon-box"><KeyRound size={23} /></span>
               <h3>Authentication</h3>
               <p>Send `X-API-KEY` with every request. Use separate keys per service so ingestion can be audited and revoked safely.</p>
+              <Link to="/settings" className="learn-more">Create API keys <ArrowRight size={14} /></Link>
             </article>
             <article className="feature-card">
               <span className="icon-box"><Zap size={23} /></span>
               <h3>Throughput</h3>
               <p>Use `/ingest/batch` for workers that emit many logs per second. Keep batches small enough to retry safely.</p>
+              <Link to="/workflow" className="learn-more">See ingestion flow <ArrowRight size={14} /></Link>
             </article>
             <article className="feature-card">
               <span className="icon-box"><ShieldCheck size={23} /></span>
               <h3>Validation</h3>
               <p>Unknown fields are preserved as metadata, while service, level, message, host, and timestamp stay normalized.</p>
+              <Link to="/security" className="learn-more">Security controls <ArrowRight size={14} /></Link>
             </article>
           </div>
         </div>

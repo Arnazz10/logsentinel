@@ -6,6 +6,10 @@ import Navbar from './components/Navbar';
 import LoadingScreen from './components/LoadingScreen';
 import Footer from './components/Footer';
 import Home from './pages/Home';
+import Pipelines from './pages/Pipelines';
+import Rank from './pages/Rank';
+import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
 import { Features, Workflow as WorkflowPage, Security } from './pages/InfoPages';
 import Dashboard from './pages/Dashboard';
 import ApiDocs from './pages/ApiDocs';
@@ -39,6 +43,10 @@ function App() {
               <main>
                 <Routes>
                   <Route path="/" element={<Home />} />
+                  <Route path="/pipelines" element={<Pipelines />} />
+                  <Route path="/rank" element={<Rank />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/settings" element={<Settings />} />
                   <Route path="/features" element={<Features />} />
                   <Route path="/workflow" element={<WorkflowPage />} />
                   <Route path="/security" element={<Security />} />
