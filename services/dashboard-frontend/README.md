@@ -17,7 +17,7 @@ npm run build
 
 ## Deploy on Vercel
 
-The repository root includes `vercel.json`. Set the Vercel project's Root
+The frontend directory includes `vercel.json`. Set the Vercel project's Root
 Directory to `services/dashboard-frontend` when importing the GitHub repo.
 
 Use these settings if Vercel asks for them:

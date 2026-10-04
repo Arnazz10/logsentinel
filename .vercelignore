@@ -1,5 +1,4 @@
 *
-!vercel.json
 !services
 !services/dashboard-frontend
 !services/dashboard-frontend/**
