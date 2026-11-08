@@ -1,701 +1,251 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import {
-  Activity,
-  ArrowRight,
-  ShieldCheck,
-  Terminal,
-  TrendingDown,
-  TrendingUp,
-  Workflow,
-  Zap,
-} from "lucide-react";
+import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Bug, Command } from 'lucide-react';
+import { Scene } from '../components/ui';
+import { fmtNum, fmtTime } from '../lib/engine';
+import { useLive } from '../lib/store';
 
-const genSpark = (base, amplitude = 20, points = 28) => {
-  const arr = [];
-  let v = base;
-  for (let i = 0; i < points; i++) {
-    v = Math.max(
-      base * 0.4,
-      Math.min(base * 1.6, v + (Math.random() - 0.5) * amplitude),
-    );
-    arr.push(v);
-  }
-  return arr;
-};
+const rise = (d = 0) => ({ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay: d, ease: [0.2, 0.7, 0.2, 1] } });
 
-const statCards = [
-  {
-    label: "Logs Processed",
-    value: 8835,
-    goal: 8000,
-    avg: 9450,
-    color: "#4fa9ff",
-    data: genSpark(400, 90, 28),
-    icon: Activity,
-  },
-  {
-    label: "Alert Latency",
-    value: "1h 48m",
-    valueNum: 108,
-    goal: "1h 30m",
-    avg: "1h 17m",
-    color: "#3fd2ff",
-    data: genSpark(110, 35, 28),
-    icon: Zap,
-    inverse: true,
-  },
-  {
-    label: "Anomalies Detected",
-    value: 850,
-    goal: 600,
-    avg: 748,
-    color: "#a78bfa",
-    data: genSpark(350, 120, 28),
-    icon: ShieldCheck,
-  },
+const STAGES = [
+  ['01', 'Collect', 'Agents and SDKs ship structured JSON to the ingestion API over HTTP. Batches up to 500 records.', 'log-collector'],
+  ['02', 'Ingest', 'FastAPI validates, stamps and publishes every record to the raw-logs Kafka topic.', 'log-ingestion-api'],
+  ['03', 'Process', 'A consumer group normalises fields, extracts features and indexes into Elasticsearch.', 'log-processor'],
+  ['04', 'Score', 'Isolation Forest isolates outliers by how few random splits it takes to separate them.', 'ml-engine'],
+  ['05', 'Alert', 'Deduplicated, rate-limited alerts fan out to Slack and email; state lands in Postgres.', 'alert-service'],
 ];
 
-const topPipelines = [
-  ["auth-api", 12450, 846, 32, 5, 99.98],
-  ["gateway", 16300, 598, 26, 8, 99.95],
-  ["payment-svc", 12980, 389, 13, 3, 99.99],
-  ["data-services", 10984, 265, -11, 12, 99.9],
-  ["ml-engine", 5578, 836, -8, 14, 99.93],
+const STACK = [
+  ['Transport', 'Apache Kafka 3.6', '3 topics · 12 partitions'],
+  ['API', 'FastAPI + Pydantic', 'ingest :8000 · ml :8001'],
+  ['Model', 'scikit-learn IsolationForest', '100 trees · ψ 256'],
+  ['Storage', 'Elasticsearch 8 · PostgreSQL 15 · Redis 7', 'logs · alerts · cache'],
+  ['Observability', 'Prometheus + Grafana', '/metrics on every service'],
+  ['Delivery', 'Docker · Kubernetes · Terraform · Jenkins', 'EKS on AWS'],
 ];
-
-const toPath = (pts, w, h, pad = 6) => {
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
-  const span = max - min || 1;
-  const step = (w - pad * 2) / (pts.length - 1);
-  return pts
-    .map((v, i) => {
-      const x = pad + i * step;
-      const y = h - pad - ((v - min) / span) * (h - pad * 2);
-      return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-};
-
-const toArea = (pts, w, h, pad = 6) => {
-  const line = toPath(pts, w, h, pad);
-  const step = (w - pad * 2) / (pts.length - 1);
-  const endX = pad + (pts.length - 1) * step;
-  return `${line} L${endX.toFixed(2)},${h - pad} L${pad},${h - pad} Z`;
-};
-
-const fade = (delay = 0) => ({
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.55, delay },
-});
 
 export default function Home() {
-  const [stats, setStats] = useState(statCards);
-  const [weekly, setWeekly] = useState(56);
-  const [total, setTotal] = useState(236);
-  const [score, setScore] = useState(7.4);
-  const [release, setRelease] = useState(80);
-  const [live, setLive] = useState(topPipelines);
+  const { logs, series, totals, svcStats, health, incidents, inject } = useLive();
+  const last = series.slice(-10);
+  const rate = last.reduce((a, b) => a + b.total, 0) / Math.max(1, last.length);
+  const open = incidents.filter((i) => i.status !== 'resolved').length;
+  const tickerLogs = logs.slice(0, 14);
+  const precision = totals.tp + totals.fp ? (totals.tp / (totals.tp + totals.fp)) * 100 : 0;
+  const recall = totals.tp + totals.fn ? (totals.tp / (totals.tp + totals.fn)) * 100 : 0;
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setStats((curr) =>
-        curr.map((s) => ({
-          ...s,
-          data: [
-            ...s.data.slice(1),
-            s.data[s.data.length - 1] + (Math.random() - 0.5) * 60,
-          ],
-          value:
-            typeof s.value === "number"
-              ? Math.max(100, s.value + Math.floor((Math.random() - 0.4) * 40))
-              : s.value,
-        })),
-      );
-      setWeekly((w) => Math.min(92, w + (Math.random() > 0.5 ? 1 : 0)));
-      setTotal((t) => t + (Math.random() > 0.7 ? 1 : 0));
-      setScore((s) =>
-        Math.max(6.5, Math.min(8.6, s + (Math.random() - 0.5) * 0.15)),
-      );
-      setRelease((r) => Math.min(94, r + (Math.random() > 0.88 ? 1 : 0)));
-      setLive((arr) =>
-        arr.map((row) => [
-          row[0],
-          row[1] + Math.floor(Math.random() * 20),
-          Math.max(40, row[2] + Math.floor((Math.random() - 0.5) * 18)),
-          Math.max(
-            -25,
-            Math.min(60, row[3] + Math.floor((Math.random() - 0.5) * 4)),
-          ),
-          row[4],
-          Math.max(
-            99.5,
-            Math.min(99.999, row[5] + (Math.random() - 0.5) * 0.02),
-          ),
-        ]),
-      );
-    }, 3200);
-    return () => clearInterval(id);
-  }, []);
-
-  const circumference = 2 * Math.PI * 48;
-  const scoreOffset = circumference - (score / 10) * circumference;
+  const stageLoad = [
+    rate * 60,
+    rate * 60,
+    rate * 59.6,
+    Object.values(svcStats).reduce((a, s) => a + s.score, 0) / 9,
+    open,
+  ];
 
   return (
-    <section className="page" style={{ paddingTop: 120 }}>
-      <div className="container home-grid">
-        {/* ── Left: Hero ─────────────────────────────────────────────── */}
-        <div className="home-hero">
-          <motion.div {...fade(0)}>
-            <p className="eyebrow">AI-Powered Log Intelligence</p>
-            <h1
-              style={{
-                maxWidth: 520,
-                margin: 0,
-                fontSize: "clamp(2.4rem, 3.2vw, 3.5rem)",
-                lineHeight: 1.07,
-                letterSpacing: "-0.038em",
-                fontWeight: 800,
-                background:
-                  "linear-gradient(160deg, #ffffff 0%, #c0d8ff 45%, #8aaeff 100%)",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-                color: "transparent",
-              }}
-            >
-              Detect the log patterns that break systems.
-            </h1>
-          </motion.div>
-
-          <motion.p className="home-sub" {...fade(0.08)}>
-            LogSentinel ingests, scores, and surfaces real-time anomalies from
-            every service pipeline — before users feel the impact.
-          </motion.p>
-
-          <motion.div className="cta-row" {...fade(0.14)}>
-            <Link to="/dashboard" className="cta-button">
-              Open Dashboard <ArrowRight size={18} />
-            </Link>
-            <Link to="/console" className="cta-button ghost">
-              <Terminal size={17} /> Live Console
-            </Link>
-          </motion.div>
-
-          {/* KPI strip */}
-          <motion.div
-            {...fade(0.2)}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 10,
-              marginTop: 36,
-            }}
-          >
-            {[
-              { label: "Services monitored", value: "12", color: "#4fa9ff" },
-              { label: "Anomalies today", value: "47", color: "#a78bfa" },
-              { label: "Pipeline uptime", value: "99.97%", color: "#3ddc97" },
-            ].map(({ label, value, color }) => (
-              <div
-                key={label}
-                style={{
-                  padding: "16px 18px",
-                  borderRadius: 14,
-                  border: "1px solid var(--line)",
-                  background: "rgba(10,17,36,0.7)",
-                  backdropFilter: "blur(12px)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "1.65rem",
-                    fontWeight: 800,
-                    color,
-                    letterSpacing: "-0.03em",
-                  }}
-                >
-                  {value}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.76rem",
-                    color: "var(--dim)",
-                    fontWeight: 600,
-                    marginTop: 4,
-                  }}
-                >
-                  {label}
+    <>
+      <section className="hero">
+        <div className="hero-canvas">
+          <Scene kind="topology" height="100%" style={{ background: 'transparent', position: 'absolute', inset: 0 }} offsetX={0.4} compact />
+        </div>
+        <div className="wrap hero-grid">
+          <div className="hero-copy">
+            <motion.div className="label" {...rise(0)}>
+              <span className="dot live t-signal" /> anomaly detection for log streams
+            </motion.div>
+            <motion.h1 className="display" {...rise(0.05)}>
+              Logs are noisy.
+              <br />
+              <em>Failures</em> aren’t.
+            </motion.h1>
+            <motion.p className="lede" {...rise(0.12)}>
+              LogSentinel pulls every log line through Kafka, scores it with an Isolation Forest and opens an incident the moment a
+              service starts behaving unlike itself. The graph behind this text is the pipeline — running, right now, in your browser.
+            </motion.p>
+            <motion.div className="hero-cta" {...rise(0.18)}>
+              <Link to="/live" className="btn primary">
+                Open live ops <ArrowRight size={14} />
+              </Link>
+              <button type="button" className="btn signal" onClick={() => inject(null, 4)}>
+                <Bug size={14} /> Break something
+              </button>
+              <button type="button" className="btn ghost" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+                <Command size={13} /> <span className="kbd">K</span>
+              </button>
+            </motion.div>
+            <motion.div className="hero-meta" {...rise(0.26)}>
+              <div>
+                <div className="label">scored</div>
+                <div className="v">{fmtNum(totals.processed)}</div>
+              </div>
+              <div>
+                <div className="label">health</div>
+                <div className="v" style={{ color: health > 7 ? 'var(--ok)' : health > 4 ? 'var(--amber)' : 'var(--signal)' }}>
+                  {health.toFixed(1)}
+                  <span className="dim" style={{ fontSize: 13 }}>
+                    /10
+                  </span>
                 </div>
               </div>
+              <div>
+                <div className="label">open incidents</div>
+                <div className={`v ${open ? 't-signal' : ''}`}>{open}</div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+        <div className="hero-legend">
+          <div>
+            normal record <span className="dot" style={{ color: 'var(--amber)', borderRadius: 0 }} />
+          </div>
+          <div>
+            indexed <span className="dot" style={{ color: 'var(--steel)', borderRadius: 0 }} />
+          </div>
+          <div>
+            anomaly → alert-service <span className="dot" style={{ color: 'var(--signal)', borderRadius: 0 }} />
+          </div>
+        </div>
+        <div className="ticker">
+          <div className="ticker-track">
+            {[...tickerLogs, ...tickerLogs].map((l, i) => (
+              <span key={`${l.id}-${i}`}>
+                <span className="dim">{fmtTime(l.ts)}</span>
+                <span className={`lvl lvl-${l.level}`}>{l.level}</span>
+                <span className="muted">{l.service}</span>
+                <span>{l.msg}</span>
+                <span className={l.anomaly ? 't-signal' : 'dim'}>{l.score.toFixed(3)}</span>
+              </span>
             ))}
-          </motion.div>
+          </div>
+        </div>
+      </section>
 
-          {/* Stat cards */}
-          <div className="stats-row" style={{ marginTop: 18 }}>
-            {stats.map((card, i) => {
-              const Icon = card.icon;
-              const w = 240,
-                h = 56;
-              const id = `sp-${i}`;
+      <section className="section">
+        <div className="wrap">
+          <div className="section-head">
+            <div className="label">
+              <span className="t-signal">§1</span> pipeline
+            </div>
+            <div>
+              <h2>
+                Five services, one direction of travel. <em>Nothing</em> is polled.
+              </h2>
+              <p>Each stage below is a container in this repo. The meters are live counts from the stream feeding this page.</p>
+            </div>
+          </div>
+          <div className="stages">
+            {STAGES.map(([n, t, d, svc], i) => {
+              const v = stageLoad[i];
+              const pct = i === 3 ? v * 100 : i === 4 ? Math.min(100, v * 25) : Math.min(100, (v / 600) * 100);
               return (
-                <motion.div
-                  key={card.label}
-                  className="stat-card"
-                  {...fade(0.1 + i * 0.06)}
-                  style={{ "--card-color": card.color }}
-                >
-                  <div className="stat-card-label">
-                    <span>{card.label}</span>
-                    <Icon size={15} style={{ color: card.color }} />
+                <div key={n} className={`stage ${i === 4 && open ? 'hot' : ''}`}>
+                  <div className="n">
+                    {n} — {svc}
                   </div>
-                  <div className="sparkline">
-                    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-                      <defs>
-                        <linearGradient
-                          id={`${id}-fill`}
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor={card.color}
-                            stopOpacity="0.5"
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor={card.color}
-                            stopOpacity="0"
-                          />
-                        </linearGradient>
-                        <linearGradient
-                          id={`${id}-stroke`}
-                          x1="0"
-                          y1="0"
-                          x2="1"
-                          y2="0"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor={card.color}
-                            stopOpacity="0.4"
-                          />
-                          <stop offset="100%" stopColor={card.color} />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        className="spark-area"
-                        d={toArea(card.data, w, h)}
-                        fill={`url(#${id}-fill)`}
-                      />
-                      <path
-                        className="spark-line"
-                        d={toPath(card.data, w, h)}
-                        stroke={`url(#${id}-stroke)`}
-                      />
-                    </svg>
+                  <h4>{t}</h4>
+                  <p>{d}</p>
+                  <div className="meter">
+                    <span className="dim">{i === 3 ? 'mean score' : i === 4 ? 'open' : 'rec/min'}</span>
+                    <span>{i === 3 ? v.toFixed(3) : i === 4 ? v : fmtNum(v)}</span>
                   </div>
-                  <div className="stat-card-value">
-                    {typeof card.value === "number"
-                      ? card.value.toLocaleString()
-                      : card.value}
+                  <div className="bar">
+                    <i style={{ width: `${pct}%` }} />
                   </div>
-                  <div className="dashed-sep" />
-                  <div className="stat-meta">
-                    <div className="stat-meta-row">
-                      <span className="meta-label">Goal</span>
-                      <span className="meta-value">
-                        {typeof card.goal === "number"
-                          ? card.goal.toLocaleString()
-                          : card.goal}
-                      </span>
-                    </div>
-                    <div className="stat-meta-row">
-                      <span className="meta-label">Avg</span>
-                      <span className="meta-value">
-                        {typeof card.avg === "number"
-                          ? card.avg.toLocaleString()
-                          : card.avg}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
+        </div>
+      </section>
 
-          {/* Progress cards */}
-          <div className="progress-row">
-            <motion.div className="progress-card" {...fade(0.3)}>
-              <div className="p-icon blue">
-                <Workflow size={22} />
-              </div>
-              <div className="p-info">
-                <h3>Weekly pipelines</h3>
-                <strong>{weekly}</strong>
-                <div className="track-wrap" style={{ marginTop: 8 }}>
-                  <div
-                    className="track-bar blue"
-                    style={{ width: `${(weekly / 92) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div
-                  style={{
-                    fontSize: "0.78rem",
-                    color: "var(--dim)",
-                    fontWeight: 600,
-                  }}
-                >
-                  of 92
-                </div>
-                <div
-                  style={{
-                    fontSize: "1.1rem",
-                    fontWeight: 800,
-                    color: "var(--blue-2)",
-                    marginTop: 4,
-                  }}
-                >
-                  {((weekly / 92) * 100).toFixed(0)}%
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div className="progress-card" {...fade(0.34)}>
-              <div className="p-icon orange">
-                <Activity size={22} />
-              </div>
-              <div className="p-info">
-                <h3>Release readiness</h3>
-                <strong>{release}%</strong>
-                <div className="track-wrap" style={{ marginTop: 8 }}>
-                  <div
-                    className="track-bar orange"
-                    style={{ width: `${release}%` }}
-                  />
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div
-                  style={{
-                    fontSize: "0.78rem",
-                    color: "var(--dim)",
-                    fontWeight: 600,
-                  }}
-                >
-                  target
-                </div>
-                <div
-                  style={{
-                    fontSize: "1.1rem",
-                    fontWeight: 800,
-                    color: "var(--orange)",
-                    marginTop: 4,
-                  }}
-                >
-                  95%
-                </div>
-              </div>
-            </motion.div>
+      <section className="section">
+        <div className="wrap grid g-main" style={{ alignItems: 'center', gap: 56 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 24 }}>
+              <span className="t-signal">§2</span> detection
+            </div>
+            <h2 style={{ fontSize: 'clamp(30px,3.6vw,48px)', lineHeight: 1.02, letterSpacing: '-0.035em' }}>
+              Outliers are <em className="serif t-amber">easy to isolate.</em> That’s the whole trick.
+            </h2>
+            <p className="muted" style={{ maxWidth: 520, marginTop: 18 }}>
+              Pick a random feature, split at a random value, repeat. Normal logs sit in a dense cluster and need many cuts; a 4-second
+              Stripe timeout gets cut off in two or three. Average that path length over 100 trees and you have a score.
+            </p>
+            <div className="matrix mt-24" style={{ maxWidth: 460 }}>
+              <div className="h">session</div>
+              <div className="h">precision</div>
+              <div className="h">recall</div>
+              <div className="h">value</div>
+              <div className="big">{precision.toFixed(1)}%</div>
+              <div className="big">{recall.toFixed(1)}%</div>
+            </div>
+            <p className="label mt-12">
+              measured against injected faults · {totals.tp} caught · {totals.fn} missed · {totals.fp} false alarms
+            </p>
+            <Link to="/lab" className="btn mt-24">
+              Try the detector <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div className="panel ticks" style={{ overflow: 'hidden' }}>
+            <Scene
+              kind="cloud"
+              height={480}
+              hud={
+                <>
+                  <span>feature space · last 600 logs</span>
+                  <span>drag to orbit</span>
+                </>
+              }
+              hudB={
+                <>
+                  <span>
+                    <span className="t-signal">■</span> score ≥ threshold
+                  </span>
+                  <span>
+                    <span className="t-steel">■</span> normal
+                  </span>
+                </>
+              }
+            />
           </div>
         </div>
+      </section>
 
-        {/* ── Right: Live dashboard panel ─────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* AI score ring */}
-          <motion.div className="panel" {...fade(0.12)}>
-            <div className="panel-head">
+      <section className="section">
+        <div className="wrap">
+          <div className="section-head">
+            <div className="label">
+              <span className="t-signal">§3</span> stack
+            </div>
+            <div>
               <h2>
-                <ShieldCheck size={18} /> AI health score
+                Boring, well-understood infrastructure. <em>On purpose.</em>
               </h2>
-              <span className="status-pill">Live</span>
             </div>
-            <div className="ai-score">
-              <div className="ring-wrap">
-                <svg viewBox="0 0 120 120">
-                  <defs>
-                    <linearGradient
-                      id="ringGradient"
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="1"
-                    >
-                      <stop offset="0%" stopColor="#4fa9ff" />
-                      <stop offset="100%" stopColor="#3fd2ff" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="60" cy="60" r="48" className="ring-bg" />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="48"
-                    className="ring-fg"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={scoreOffset}
-                  />
-                </svg>
-                {/* Score number only — no sub-label inside the ring */}
-                <div className="ring-center">
-                  <strong style={{ fontSize: "2.8rem", lineHeight: 1 }}>
-                    {score.toFixed(1)}
-                  </strong>
-                </div>
-              </div>
-
-              {/* Label sits cleanly below the ring */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  marginTop: 10,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "0.78rem",
-                    color: "var(--dim)",
-                    fontWeight: 600,
-                  }}
-                >
-                  out of
-                </span>
-                <span
-                  style={{
-                    fontSize: "0.92rem",
-                    color: "var(--muted)",
-                    fontWeight: 700,
-                  }}
-                >
-                  10.0
-                </span>
-              </div>
-            </div>
-
-            <p className="ai-sub" style={{ marginTop: 6 }}>
-              <strong>{total}</strong> anomalies resolved ·{" "}
-              <strong style={{ color: "var(--green)" }}>Healthy</strong>
-            </p>
-
-            {/* Release readiness bar */}
-            <div className="release-readiness">
-              <div className="release-head">
-                <h3>Release readiness</h3>
-                <span className="release-percent">{release}%</span>
-              </div>
-              <div className="release-track">
-                <div
-                  className="release-fill"
-                  style={{ width: `${release}%` }}
-                />
-              </div>
-              <div className="release-labels">
-                <span>0%</span>
-                <span>25%</span>
-                <span>50%</span>
-                <span>75%</span>
-                <span>100%</span>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Live pipelines table */}
-          <motion.div className="panel" {...fade(0.18)}>
-            <div className="panel-head">
-              <h2>
-                <Workflow size={18} /> Top pipelines
-              </h2>
-              <Link
-                to="/pipelines"
-                style={{
-                  color: "var(--blue-2)",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                View all <ArrowRight size={13} />
-              </Link>
-            </div>
-            <table className="pipelines-table">
-              <thead>
-                <tr>
-                  <th>Service</th>
-                  <th>Throughput</th>
-                  <th>Trend</th>
-                  <th>Uptime</th>
+          </div>
+          <table className="spec">
+            <tbody>
+              {STACK.map(([k, v, n]) => (
+                <tr key={k}>
+                  <td>{k}</td>
+                  <td>{v}</td>
+                  <td>{n}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {live.map((row, i) => (
-                  <motion.tr
-                    key={row[0]}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                  >
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <div
-                          className="avatar"
-                          style={{ width: 30, height: 30, fontSize: "0.68rem" }}
-                        >
-                          {row[0].slice(0, 2).toUpperCase()}
-                        </div>
-                        <strong style={{ fontSize: "0.88rem" }}>
-                          {row[0]}
-                        </strong>
-                      </div>
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "0.86rem",
-                      }}
-                    >
-                      {row[2]}/s
-                    </td>
-                    <td>
-                      <span
-                        className={`level-trend ${row[3] >= 0 ? "up" : "down"}`}
-                      >
-                        {row[3] >= 0 ? (
-                          <TrendingUp size={13} />
-                        ) : (
-                          <TrendingDown size={13} />
-                        )}
-                        {row[3] >= 0 ? "+" : ""}
-                        {row[3]}%
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "0.86rem",
-                        color: "var(--muted)",
-                      }}
-                    >
-                      {row[5].toFixed(2)}%
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </motion.div>
-
-          {/* Quick nav cards */}
-          <motion.div
-            {...fade(0.24)}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 10,
-            }}
-          >
-            {[
-              {
-                to: "/analytics",
-                icon: Activity,
-                label: "Analytics",
-                desc: "Throughput & anomaly charts",
-              },
-              {
-                to: "/rank",
-                icon: ShieldCheck,
-                label: "Rankings",
-                desc: "Service reliability leaderboard",
-              },
-              {
-                to: "/console",
-                icon: Terminal,
-                label: "CLI Console",
-                desc: "Live log stream + commands",
-              },
-              {
-                to: "/api-docs",
-                icon: Zap,
-                label: "API Docs",
-                desc: "Ingest, predict, query",
-              },
-            ].map(({ to, icon: Icon, label, desc }) => (
-              <Link
-                key={to}
-                to={to}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  padding: "16px 16px",
-                  borderRadius: 14,
-                  border: "1px solid var(--line)",
-                  background: "rgba(10,17,36,0.7)",
-                  transition: "border-color 0.18s, transform 0.18s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--line-strong)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--line)";
-                  e.currentTarget.style.transform = "none";
-                }}
-              >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    display: "grid",
-                    placeItems: "center",
-                    flexShrink: 0,
-                    background: "rgba(79,169,255,0.1)",
-                    border: "1px solid rgba(79,169,255,0.2)",
-                    color: "var(--blue-2)",
-                  }}
-                >
-                  <Icon size={17} />
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.9rem",
-                      fontWeight: 700,
-                      color: "var(--text)",
-                    }}
-                  >
-                    {label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.76rem",
-                      color: "var(--muted)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {desc}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </motion.div>
+              ))}
+            </tbody>
+          </table>
+          <div className="row wrap-f mt-24" style={{ gap: 10 }}>
+            <Link to="/workflow" className="btn">
+              How it fits together
+            </Link>
+            <Link to="/api-docs" className="btn ghost">
+              API reference
+            </Link>
+            <a href="https://github.com/Arnazz10/logsentinel" target="_blank" rel="noreferrer" className="btn ghost">
+              Source on GitHub ↗
+            </a>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

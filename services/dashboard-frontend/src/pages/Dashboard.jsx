@@ -1,432 +1,404 @@
-import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import {
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  Bell,
-  Cpu,
-  Database,
-  Download,
-  RefreshCcw,
-  Search,
-  ShieldCheck,
-  Terminal,
-  Trash2,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Bug, Cpu, Download, Pause, Play, Search, Trash2, X } from 'lucide-react';
+import { PageHead, Readout, Scene, scoreColor } from '../components/ui';
+import { SERVICES, SERVICE_IDS, fmtNum, fmtTime, toFeatures } from '../lib/engine';
+import { useLive } from '../lib/store';
 
-const seedLogs = [
-  { id: 1, time: '19:23:01', service: 'auth-api', level: 'INFO', msg: 'User login successful for user_842', anomaly: false },
-  { id: 2, time: '19:23:04', service: 'payment-svc', level: 'ERROR', msg: 'Stripe API timeout after 10s', anomaly: true },
-  { id: 3, time: '19:23:05', service: 'gateway', level: 'WARN', msg: 'High latency detected on /v1/ingest', anomaly: false },
-  { id: 4, time: '19:23:10', service: 'db-master', level: 'INFO', msg: 'Replica lag synchronized', anomaly: false },
-  { id: 5, time: '19:23:12', service: 'ml-engine', level: 'INFO', msg: 'Inference batch complete for 2,000 records', anomaly: false },
-  { id: 6, time: '19:23:15', service: 'alert-mgr', level: 'ERROR', msg: 'Slack webhook failed with 403 Forbidden', anomaly: true },
-  { id: 7, time: '19:23:18', service: 'checkout', level: 'WARN', msg: 'Retry storm detected against billing provider', anomaly: true },
-  { id: 8, time: '19:23:22', service: 'edge-proxy', level: 'INFO', msg: 'GET /api/v1/health returned 200', anomaly: false },
-];
+const LEVEL_OPTS = ['all', 'INFO', 'WARN', 'ERROR', 'CRITICAL'];
 
-const services = ['all', 'auth-api', 'payment-svc', 'gateway', 'db-master', 'ml-engine', 'alert-mgr', 'checkout', 'edge-proxy'];
+const download = (name, body, type) => {
+  const url = URL.createObjectURL(new Blob([body], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
-const Kpi = ({ icon, label, value, delta, deltaDir = 'up' }) => (
-  <div className="kpi">
-    <div className="kpi-icon">{icon}</div>
-    <span className="kpi-label">{label}</span>
-    <span className="kpi-value">{value}</span>
-    {delta && <span className={`kpi-delta ${deltaDir}`}>{deltaDir === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {delta}</span>}
-  </div>
-);
+function LogDetail({ log, onClose }) {
+  const { model, settings } = useLive();
+  const paths = useMemo(() => model.paths(toFeatures(log)), [model, log]);
+  const mean = paths.reduce((a, b) => a + b, 0) / paths.length;
+  const svc = SERVICES.find((s) => s.id === log.service);
+  const reasons = [
+    ['latency', `${log.latency.toFixed(0)} ms`, svc ? log.latency / svc.base : 1, `typical ${svc?.base ?? '—'} ms`],
+    ['error rate', `${log.errorRate.toFixed(2)} %`, log.errorRate / 0.8, 'typical < 1 %'],
+    ['payload', `${log.payload.toFixed(1)} KB`, log.payload / 4, 'typical ~4 KB'],
+  ];
+  const buckets = Array(12).fill(0);
+  paths.forEach((p) => (buckets[Math.min(11, Math.floor(p))] += 1));
+  const bmax = Math.max(...buckets);
 
-const AlertCard = ({ title, body, time, severity }) => (
-  <article className="alert-card">
-    <h3>
-      <span>{title}</span>
-      <span className={`level-${severity}`}>{severity.toUpperCase()}</span>
-    </h3>
-    <p>{body}</p>
-    <div className="alert-meta">{time}</div>
-  </article>
-);
+  return (
+    <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
+      <motion.div className="modal" initial={{ y: 10 }} animate={{ y: 0 }} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="panel-head">
+          <h3>
+            <span className="idx">trace {log.traceId}</span> {log.service}
+          </h3>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="panel-body">
+          <p className="mono" style={{ margin: '0 0 16px', fontSize: 13 }}>
+            <span className={`lvl lvl-${log.level}`}>{log.level}</span> {log.msg}
+          </p>
+          <div className="grid g-2" style={{ gap: 24 }}>
+            <div>
+              <div className="label" style={{ marginBottom: 10 }}>
+                why it scored {log.score.toFixed(3)}
+              </div>
+              <div className="bars-h">
+                {reasons.map(([k, v, ratio, hint]) => (
+                  <div key={k} className="row" style={{ gridTemplateColumns: '80px 1fr 80px' }}>
+                    <span className="n">{k}</span>
+                    <span className="track" title={hint}>
+                      <i className={ratio > 3 ? 'hot' : ''} style={{ width: `${Math.min(100, ratio * 20)}%` }} />
+                    </span>
+                    <span className="v">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <dl className="kv mt-24">
+                <dt>score</dt>
+                <dd style={{ color: scoreColor(log.score, settings.threshold) }}>{log.score.toFixed(4)}</dd>
+                <dt>threshold</dt>
+                <dd>{settings.threshold.toFixed(2)}</dd>
+                <dt>verdict</dt>
+                <dd className={log.anomaly ? 't-signal' : 't-ok'}>{log.anomaly ? 'ANOMALY' : 'normal'}</dd>
+                <dt>ground truth</dt>
+                <dd>{log.injected ? 'injected fault' : 'organic traffic'}</dd>
+                <dt>time</dt>
+                <dd>{new Date(log.ts).toISOString()}</dd>
+              </dl>
+            </div>
+            <div>
+              <div className="label" style={{ marginBottom: 10 }}>
+                path length across {paths.length} trees · mean {mean.toFixed(2)}
+              </div>
+              <svg viewBox="0 0 240 120" className="chart" style={{ height: 160 }}>
+                {buckets.map((b, i) => (
+                  <rect key={i} x={i * 20 + 2} width={16} y={110 - (b / bmax) * 100} height={(b / bmax) * 100} fill={i < 5 ? 'var(--signal)' : 'var(--steel)'} opacity={0.85} />
+                ))}
+                <line x1="0" x2="240" y1="110.5" y2="110.5" className="grid-l" />
+              </svg>
+              <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
+                Short paths (left, red) mean the record was separated from the herd in only a few random cuts.
+              </p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
-const Dashboard = () => {
-  const [logs, setLogs] = useState(seedLogs);
-  const [query, setQuery] = useState('');
-  const [service, setService] = useState('all');
-  const [onlyAnomalies, setOnlyAnomalies] = useState(false);
-  const [isMlRunning, setIsMlRunning] = useState(false);
-  const [mlResult, setMlResult] = useState(null);
-  const [showStats, setShowStats] = useState(false);
-  const [showFlow, setShowFlow] = useState(false);
-  const [kpis, setKpis] = useState({
-    ingest: 850,
-    health: 99.9,
-    anomalies: 3,
-    records: 152640,
-  });
-
-  const filteredLogs = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return logs.filter((log) => {
-      const matchesQuery = !normalized || `${log.service} ${log.level} ${log.msg}`.toLowerCase().includes(normalized);
-      const matchesService = service === 'all' || log.service === service;
-      const matchesAnomaly = !onlyAnomalies || log.anomaly;
-      return matchesQuery && matchesService && matchesAnomaly;
+function Inference({ onClose }) {
+  const { logs, model, settings } = useLive();
+  const res = useMemo(() => {
+    const t0 = performance.now();
+    const scored = logs.slice(0, 500).map((l) => ({ ...l, s: model.score(toFeatures(l)) }));
+    const ms = performance.now() - t0;
+    const c = { tp: 0, fp: 0, fn: 0, tn: 0 };
+    scored.forEach((l) => {
+      const p = l.s >= settings.threshold;
+      if (p && l.injected) c.tp++;
+      else if (p) c.fp++;
+      else if (l.injected) c.fn++;
+      else c.tn++;
     });
-  }, [logs, onlyAnomalies, query, service]);
+    const hist = Array(20).fill(0);
+    scored.forEach((l) => (hist[Math.min(19, Math.floor(((l.s - 0.3) / 0.5) * 20))] += 1));
+    return { ms, n: scored.length, c, hist };
+  }, [logs, model, settings.threshold]);
+  const { c } = res;
+  const prec = c.tp + c.fp ? c.tp / (c.tp + c.fp) : 0;
+  const rec = c.tp + c.fn ? c.tp / (c.tp + c.fn) : 0;
+  const f1 = prec + rec ? (2 * prec * rec) / (prec + rec) : 0;
+  const hmax = Math.max(1, ...res.hist);
+  const thX = ((settings.threshold - 0.3) / 0.5) * 400;
 
-  const addLiveLog = () => {
-    const pool = [
-      ['gateway', 'INFO', 'Steady request flow observed across rolling window', false],
-      ['auth-api', 'ERROR', 'Session validator rejected expired signing key', true],
-      ['ml-engine', 'INFO', 'Anomaly batch scored in 18ms', false],
-      ['payment-svc', 'WARN', 'Upstream billing p95 latency crossed 800ms', true],
-      ['checkout', 'INFO', 'Order #' + Math.floor(Math.random() * 90000 + 10000) + ' completed successfully', false],
-      ['db-master', 'WARN', 'Read replica lag is 2.8s and rising', true],
-      ['edge-proxy', 'INFO', 'Cache hit ratio improved to 94.2%', false],
-      ['alert-mgr', 'INFO', 'PagerDuty webhook delivered successfully', false],
-    ];
-    const [nextService, level, msg, anomaly] = pool[Math.floor(Math.random() * pool.length)];
-    const now = new Date().toLocaleTimeString('en-US', { hour12: false });
-    setLogs((current) =>
-      [{ id: Date.now() + Math.random(), time: now, service: nextService, level, msg, anomaly }, ...current].slice(0, 60)
+  return (
+    <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={onClose}>
+      <motion.div className="modal" initial={{ y: 10 }} animate={{ y: 0 }} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="panel-head">
+          <h3>
+            <Cpu size={14} /> Batch inference · {res.n} records in {res.ms.toFixed(1)} ms
+          </h3>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="strip" style={{ '--n': 4, margin: 16 }}>
+          <Readout label="precision" value={(prec * 100).toFixed(1)} unit="%" />
+          <Readout label="recall" value={(rec * 100).toFixed(1)} unit="%" />
+          <Readout label="f1" value={f1.toFixed(3)} />
+          <Readout label="flagged" value={c.tp + c.fp} unit={`/ ${res.n}`} />
+        </div>
+        <div className="panel-body" style={{ paddingTop: 0 }}>
+          <div className="label" style={{ marginBottom: 8 }}>
+            score distribution · threshold {settings.threshold.toFixed(2)}
+          </div>
+          <svg viewBox="0 0 400 120" className="chart" style={{ height: 150 }}>
+            {res.hist.map((h, i) => (
+              <rect key={i} x={i * 20 + 1} width={18} y={110 - (h / hmax) * 100} height={(h / hmax) * 100} fill={i * 20 >= thX ? 'var(--signal)' : 'var(--steel)'} opacity={0.85} />
+            ))}
+            <line x1={thX} x2={thX} y1="0" y2="112" stroke="var(--amber)" strokeDasharray="3 3" />
+            <text className="axis-t" x="0" y="120">0.30</text>
+            <text className="axis-t" x="400" y="120" textAnchor="end">0.80</text>
+          </svg>
+          <div className="matrix mt-24">
+            <div className="h" />
+            <div className="h">predicted anomaly</div>
+            <div className="h">predicted normal</div>
+            <div className="h">injected fault</div>
+            <div className="big t-ok">{c.tp}</div>
+            <div className="big t-signal">{c.fn}</div>
+            <div className="h">organic</div>
+            <div className="big t-amber">{c.fp}</div>
+            <div className="big">{c.tn}</div>
+          </div>
+          <p className="label mt-12">model: iforest · {model.nTrees} trees · ψ {model.sampleSize} · trained on {model.trainedOn} vectors</p>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+export default function Dashboard() {
+  const live = useLive();
+  const { logs, series, svcStats, settings, setSettings, incidents, inject, clearLogs } = live;
+  const [q, setQ] = useState('');
+  const [svc, setSvc] = useState('all');
+  const [level, setLevel] = useState('all');
+  const [onlyAnom, setOnlyAnom] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [infer, setInfer] = useState(false);
+
+  const filtered = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return logs.filter(
+      (l) =>
+        (svc === 'all' || l.service === svc) &&
+        (level === 'all' || l.level === level) &&
+        (!onlyAnom || l.anomaly) &&
+        (!n || `${l.service} ${l.level} ${l.msg} ${l.traceId}`.toLowerCase().includes(n)),
     );
-    if (anomaly) {
-      setKpis((k) => ({ ...k, anomalies: k.anomalies + 1 }));
-    }
-  };
+  }, [logs, q, svc, level, onlyAnom]);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      addLiveLog();
-      setKpis((k) => ({
-        ingest: Math.max(120, Math.min(1400, k.ingest + Math.floor((Math.random() - 0.45) * 60))),
-        health: Math.max(98.5, Math.min(99.999, k.health + (Math.random() - 0.6) * 0.02)),
-        records: k.records + Math.floor(Math.random() * 500),
-      }));
-    }, 2200);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const perSec = settings.tickMs / 1000;
+  const tput = series.map((p) => p.total / perSec);
+  const anomRate = series.map((p) => (p.total ? (p.anomalies / p.total) * 100 : 0));
+  const scoreS = series.map((p) => p.score);
+  const recent = logs.slice(0, 200);
+  const lat = recent.map((l) => l.latency).sort((a, b) => a - b);
+  const p95 = lat.length ? lat[Math.floor(lat.length * 0.95)] : 0;
+  const open = incidents.filter((i) => i.status !== 'resolved');
+  const anomalies = logs.filter((l) => l.anomaly).slice(0, 14);
 
-  const clearLogs = () => setLogs([]);
-  const exportLogs = () => {
-    const payload = filteredLogs.map((log) => JSON.stringify(log)).join('\n');
-    const blob = new Blob([payload], { type: 'application/x-ndjson' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'logsentinel-logs.ndjson';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const runMlInference = () => {
-    setIsMlRunning(true);
-    setMlResult(null);
-    setTimeout(() => {
-      setIsMlRunning(false);
-      setMlResult({
-        score: (0.85 + Math.random() * 0.14).toFixed(4),
-        status: Math.random() > 0.9 ? 'ANOMALY' : 'NORMAL',
-        timestamp: new Date().toISOString(),
-      });
-      addLiveLog();
-    }, 2000);
-  };
-
-  const anomalyCount = logs.filter((log) => log.anomaly).length;
+  const exportNd = () => download('logsentinel-logs.ndjson', filtered.map((l) => JSON.stringify(l)).join('\n'), 'application/x-ndjson');
+  const exportCsv = () =>
+    download(
+      'logsentinel-logs.csv',
+      ['ts,service,level,score,anomaly,latency_ms,error_rate,payload_kb,message', ...filtered.map((l) => [new Date(l.ts).toISOString(), l.service, l.level, l.score.toFixed(4), l.anomaly, l.latency.toFixed(1), l.errorRate.toFixed(2), l.payload.toFixed(1), JSON.stringify(l.msg)].join(','))].join('\n'),
+      'text/csv',
+    );
 
   return (
     <section className="page">
-      <div className="container dashboard-grid">
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h1>Operations Center</h1>
-            <p>Real-time logs, anomaly scoring, service health, and alert context.</p>
+      <div className="wrap">
+        <PageHead
+          index="02"
+          kicker="live operations"
+          title={
+            <>
+              Operations <em>floor</em>
+            </>
+          }
+          actions={
+            <>
+              <button className={`btn ${settings.paused ? 'on' : ''}`} onClick={() => setSettings({ paused: !settings.paused })}>
+                {settings.paused ? <Play size={13} /> : <Pause size={13} />} {settings.paused ? 'resume' : 'pause'}
+              </button>
+              <button className="btn" onClick={() => setInfer(true)}>
+                <Cpu size={13} /> batch inference
+              </button>
+              <button className="btn signal" onClick={() => inject(svc === 'all' ? null : svc, 4)}>
+                <Bug size={13} /> inject fault
+              </button>
+            </>
+          }
+        >
+          Every row is scored on arrival. Click one to see why the forest thinks it’s odd.
+        </PageHead>
+
+        <div className="strip" style={{ '--n': 5 }}>
+          <Readout label="throughput" value={(tput.at(-1) || 0).toFixed(1)} unit="rec/s" data={tput.slice(-40)} sub="60s window" subR={`${fmtNum(live.totals.processed)} total`} />
+          <Readout label="anomaly rate" value={(anomRate.slice(-10).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(10, anomRate.length))).toFixed(1)} unit="%" data={anomRate.slice(-40)} color="var(--signal)" sub="10s avg" subR={`${live.totals.anomalies} flagged`} />
+          <Readout label="max score / tick" value={(scoreS.at(-1) || 0).toFixed(3)} data={scoreS.slice(-40)} color="var(--amber)" sub={`threshold ${settings.threshold.toFixed(2)}`} />
+          <Readout label="latency p95" value={p95.toFixed(0)} unit="ms" sub="last 200 logs" subR={`p50 ${(lat[Math.floor(lat.length / 2)] || 0).toFixed(0)}ms`} />
+          <Readout label="open incidents" value={open.length} color={open.length ? 'var(--signal)' : 'var(--ok)'} sub={open.length ? open.map((i) => i.service).slice(0, 2).join(', ') : 'all quiet'} subR={<Link to="/incidents" className="t-amber">view →</Link>} />
+        </div>
+
+        <div className="grid g-main mt-12">
+          <div className="panel ticks" style={{ overflow: 'hidden' }}>
+            <div className="panel-head">
+              <h3>
+                <span className="idx">A</span> Log terrain
+              </h3>
+              <span className="label">volume × service × time · red = anomalous</span>
+            </div>
+            <Scene kind="terrain" height={380} />
           </div>
-          <div className="row-actions">
-            <button className="pill-button" type="button" onClick={exportLogs}>
-              <Download size={18} />
-              Export logs
-            </button>
-            <button
-              className={`pill-button ${isMlRunning ? 'loading' : ''}`}
-              type="button"
-              onClick={runMlInference}
-              disabled={isMlRunning}
-            >
-              <Cpu size={18} className={isMlRunning ? 'spin' : ''} />
-              {isMlRunning ? 'Analyzing...' : 'Run ML Inference'}
-            </button>
-            <button className="pill-button" type="button" onClick={() => setShowFlow(true)}>
-              <Activity size={18} />
-              ML Flow
-            </button>
-            <button className="pill-button" type="button" onClick={() => setShowStats(true)}>
-              <BarChart3 size={18} />
-              ML Stats
-            </button>
-            <button className="pill-button primary" type="button" onClick={addLiveLog}>
-              <RefreshCcw size={18} />
-              Pull live event
-            </button>
-          </div>
-        </header>
-
-        {showStats && (
-          <div className="modal-overlay" onClick={() => setShowStats(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="modal-content"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">
-                <h2><BarChart3 size={24} /> ML Flow Statistics</h2>
-                <button className="close-btn" onClick={() => setShowStats(false)}>×</button>
-              </div>
-
-              <div className="stats-grid-modal">
-                <div className="stat-card-modal">
-                  <span className="stat-label-modal">Model Accuracy</span>
-                  <span className="stat-value-modal text-green">98.2%</span>
-                </div>
-                <div className="stat-card-modal">
-                  <span className="stat-label-modal">Precision</span>
-                  <span className="stat-value-modal text-orange">94.5%</span>
-                </div>
-                <div className="stat-card-modal">
-                  <span className="stat-label-modal">Recall</span>
-                  <span className="stat-value-modal text-blue">91.8%</span>
-                </div>
-                <div className="stat-card-modal">
-                  <span className="stat-label-modal">F1 Score</span>
-                  <span className="stat-value-modal">0.931</span>
-                </div>
-              </div>
-
-              <div className="chart-container-modal">
-                <h3>Anomaly Distribution (Last 24h)</h3>
-                <div className="mock-chart">
-                  {[30, 45, 25, 60, 40, 85, 50, 65, 35, 20, 55, 45].map((h, i) => (
-                    <div key={i} className="chart-bar-outer">
-                      <div className="chart-bar" style={{ height: `${h}%` }}>
-                        <div className="bar-tooltip">{h}%</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="chart-labels">
-                  <span>00:00</span>
-                  <span>08:00</span>
-                  <span>16:00</span>
-                  <span>23:59</span>
-                </div>
-              </div>
-
-              <div className="model-info-footer">
-                <div className="info-item">
-                  <span className="info-label">Active Model:</span>
-                  <span className="info-value">IsolationForest-v2.4-stable</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Last Training:</span>
-                  <span className="info-value">2026-04-27 09:12 UTC</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Dataset Size:</span>
-                  <span className="info-value">1.2M records</span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {showFlow && (
-          <div className="modal-overlay" onClick={() => setShowFlow(false)}>
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="modal-content flow-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">
-                <h2><Activity size={24} /> ML Pipeline Architecture</h2>
-                <button className="close-btn" onClick={() => setShowFlow(false)}>×</button>
-              </div>
-
-              <div className="flow-viz-container">
-                <div className="flow-path">
-                  <div className="flow-step-node">
-                    <div className="node-icon"><Database size={20} /></div>
-                    <span>Log Source</span>
-                  </div>
-                  <div className="flow-connector"></div>
-                  <div className="flow-step-node accent">
-                    <div className="node-icon"><Activity size={20} /></div>
-                    <span>Kafka Stream</span>
-                  </div>
-                  <div className="flow-connector"></div>
-                  <div className="flow-step-node highlight">
-                    <div className="node-icon"><Cpu size={20} /></div>
-                    <span>ML Engine</span>
-                    <small>Isolation Forest</small>
-                  </div>
-                  <div className="flow-connector"></div>
-                  <div className="flow-step-node alert">
-                    <div className="node-icon"><AlertTriangle size={20} /></div>
-                    <span>Anomaly Alert</span>
-                  </div>
-                  <div className="flow-connector"></div>
-                  <div className="flow-step-node">
-                    <div className="node-icon"><Terminal size={20} /></div>
-                    <span>Operator UI</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flow-description">
-                <p>The <strong>LogSentinel ML Flow</strong> processes logs in micro-batches. Each log is vectorised and scored against a baseline model. If a log's isolation score exceeds the <strong>0.85 threshold</strong>, it's immediately flagged as an anomaly and routed to the Active Alerts panel.</p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {mlResult && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="ml-result-banner"
-          >
-            <div className="ml-result-content">
-              <Cpu size={20} />
-              <span><strong>ML Insight:</strong> Last batch scored <strong>{mlResult.score}</strong>. Result:
-                <span className={`status-tag ${mlResult.status.toLowerCase()}`}> {mlResult.status}</span>
+          <div className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="panel-head">
+              <h3>
+                <span className="idx">B</span> Flagged
+              </h3>
+              <span className="tag signal">
+                <span className="dot live" /> {anomalies.length}
               </span>
             </div>
-            <button className="close-btn" onClick={() => setMlResult(null)}>×</button>
-          </motion.div>
-        )}
-
-        <div className="kpi-grid">
-          <Kpi icon={<Activity size={24} />} label="Ingestion rate" value={`${kpis.ingest}/s`} delta="+4.1% vs 1h ago" deltaDir="up" />
-          <Kpi icon={<ShieldCheck size={24} />} label="Service health" value={`${kpis.health.toFixed(2)}%`} delta="-0.02% vs 1h ago" deltaDir="up" />
-          <Kpi icon={<AlertTriangle size={24} />} label="Active anomalies" value={anomalyCount} delta={`${Math.max(0, anomalyCount - 3)} new`} deltaDir={anomalyCount > 3 ? 'down' : 'up'} />
-          <Kpi icon={<Database size={24} />} label="Total records" value={kpis.records.toLocaleString()} delta="+2.1%" deltaDir="up" />
-        </div>
-
-        <div className="ops-grid">
-          <section className="panel">
-            <div className="panel-head">
-              <h2>
-                <Terminal size={20} /> System logs
-              </h2>
-              <div className="toolbar">
-                <label className="search-box">
-                  <Search size={16} />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search logs"
-                    aria-label="Search logs"
-                  />
-                </label>
-                <select className="select-input" value={service} onChange={(event) => setService(event.target.value)}>
-                  {services.map((name) => (
-                    <option key={name} value={name}>
-                      {name === 'all' ? 'All services' : name}
-                    </option>
-                  ))}
-                </select>
-                <button className="icon-button" type="button" onClick={() => setOnlyAnomalies((value) => !value)} aria-label="Toggle anomalies">
-                  <AlertTriangle size={17} color={onlyAnomalies ? 'var(--orange)' : 'currentColor'} />
+            <div className="scroll" style={{ flex: 1, maxHeight: 380 }}>
+              {anomalies.length === 0 && <div className="empty">nothing above threshold yet</div>}
+              {anomalies.map((l) => (
+                <button key={l.id} className="inc-item" style={{ gridTemplateColumns: '1fr auto' }} onClick={() => setDetail(l)}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="ttl mono" style={{ fontSize: 12.5 }}>
+                      {l.msg}
+                    </div>
+                    <div className="meta">
+                      {fmtTime(l.ts)} · {l.service} · {l.level}
+                    </div>
+                  </div>
+                  <span className="mono t-signal" style={{ fontSize: 13 }}>
+                    {l.score.toFixed(3)}
+                  </span>
                 </button>
-                <button className="icon-button" type="button" onClick={clearLogs} aria-label="Clear logs">
-                  <Trash2 size={17} />
-                </button>
-              </div>
-            </div>
-
-            <div className="log-table" aria-live="polite">
-              {filteredLogs.length === 0 ? (
-                <div className="log-row">
-                  <span>No logs match the current filters.</span>
-                </div>
-              ) : (
-                filteredLogs.map((log, i) => (
-                  <motion.div
-                    className={`log-row ${log.anomaly ? 'anomaly' : ''}`}
-                    key={log.id}
-                    initial={i === 0 ? { opacity: 0, x: -12 } : false}
-                    animate={i === 0 ? { opacity: 1, x: 0 } : false}
-                    transition={{ duration: 0.35 }}
-                  >
-                    <span className="log-time">{log.time}</span>
-                    <span className="log-service">[{log.service}]</span>
-                    <strong className={`level-${log.level.toLowerCase()}`}>{log.level}</strong>
-                    <span>{log.msg}</span>
-                    {log.anomaly ? <span className="mini-chip">ANOMALY</span> : <span />}
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </section>
-
-          <aside className="panel">
-            <div className="panel-head">
-              <h2>
-                <Bell size={20} /> Active alerts
-              </h2>
-              <span className="status-pill">Live</span>
-            </div>
-            <div className="alert-list">
-              <AlertCard severity="error" title="Potential brute force" body="Multiple failed logins from the same network block." time="2m ago" />
-              <AlertCard severity="warn" title="High consumer lag" body="Kafka consumer lag exceeded 50,000 records on raw-logs." time="15m ago" />
-              <AlertCard severity="info" title="Model refreshed" body="Isolation Forest baseline updated with the latest rolling dataset." time="1h ago" />
-            </div>
-            <button className="pill-button" type="button" style={{ width: '100%', marginTop: 18 }}>
-              View alert history
-            </button>
-          </aside>
-        </div>
-
-        <section className="panel terminal-panel">
-          <div className="panel-head">
-            <h2><Terminal size={20} /> Real-time Live Stream</h2>
-            <div className="terminal-dots">
-              <span className="dot red"></span>
-              <span className="dot yellow"></span>
-              <span className="dot green"></span>
+              ))}
             </div>
           </div>
-          <div className="terminal-body live-stream">
-            {logs.slice(0, 12).flatMap((log, i) => (
-              <div key={`g-${log.id}`} className="terminal-line-group" style={{ opacity: 1 - Math.min(0.7, i * 0.06) }}>
-                <div className="term-entry">
-                  <span className="term-time">[{log.time}]</span>
-                  <span className="term-prompt">user@logsentinel:~$</span>
-                  <span className="term-cmd">ingest --service {log.service} --level {log.level}</span>
-                </div>
-                <div className="term-output-group">
-                  <span className="term-time">[{log.time}]</span>
-                  <span className="term-prompt">user@logsentinel:~$</span>
-                  <span className={`term-status ${log.level.toLowerCase()}`}>{log.level}</span>
-                  <span className="term-message">
-                    {log.msg}
-                    {log.anomaly && <span className="term-anomaly blink"> [!! ANOMALY DETECTED !!]</span>}
-                  </span>
-                </div>
+        </div>
+
+        <div className="panel mt-12">
+          <div className="panel-head" style={{ flexWrap: 'wrap' }}>
+            <h3>
+              <span className="idx">C</span> Stream
+              <span className="dim mono" style={{ fontSize: 11 }}>
+                {filtered.length} / {logs.length}
+              </span>
+            </h3>
+            <div className="row wrap-f">
+              <div className="search" style={{ width: 220 }}>
+                <Search size={13} />
+                <input className="field" placeholder="grep message, trace…" value={q} onChange={(e) => setQ(e.target.value)} />
+              </div>
+              <select className="field" value={svc} onChange={(e) => setSvc(e.target.value)}>
+                <option value="all">all services</option>
+                {SERVICE_IDS.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+              <div className="seg">
+                {LEVEL_OPTS.map((l) => (
+                  <button key={l} className={level === l ? 'on' : ''} onClick={() => setLevel(l)}>
+                    {l === 'CRITICAL' ? 'CRIT' : l}
+                  </button>
+                ))}
+              </div>
+              <button className={`btn sm ${onlyAnom ? 'on' : ''}`} onClick={() => setOnlyAnom((v) => !v)}>
+                anomalies only
+              </button>
+              <button className="btn sm" onClick={exportNd} title="Export NDJSON">
+                <Download size={12} /> ndjson
+              </button>
+              <button className="btn sm" onClick={exportCsv} title="Export CSV">
+                csv
+              </button>
+              <button className="btn sm ghost" onClick={clearLogs} title="Clear">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+          <div className="stream scroll" style={{ maxHeight: 440, padding: '8px 0' }}>
+            {filtered.slice(0, 200).map((l, i) => (
+              <div key={l.id} className={`stream-row ${l.anomaly ? 'anom' : ''} ${i < 4 ? 'fresh' : ''}`} onClick={() => setDetail(l)} style={{ cursor: 'pointer' }}>
+                <span className="t">{fmtTime(l.ts)}</span>
+                <span className={`lvl lvl-${l.level}`}>{l.level}</span>
+                <span className="s">{l.service}</span>
+                <span className="m">{l.msg}</span>
+                <span className="sc">{l.score.toFixed(3)}</span>
               </div>
             ))}
-            <div className="terminal-cursor blink-cursor">▊</div>
+            {!filtered.length && <div className="empty">no lines match</div>}
           </div>
-        </section>
+        </div>
+
+        <div className="panel mt-12">
+          <div className="panel-head">
+            <h3>
+              <span className="idx">D</span> Service matrix
+            </h3>
+            <span className="label">ewma latency · cumulative counts</span>
+          </div>
+          <div className="scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>service</th>
+                  <th className="hide-sm">stage</th>
+                  <th className="num">logs</th>
+                  <th className="num">errors</th>
+                  <th className="num">anomalies</th>
+                  <th className="num">latency</th>
+                  <th className="num">score</th>
+                  <th className="hide-sm">trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SERVICES.map((s) => {
+                  const st = svcStats[s.id];
+                  const hot = open.some((i) => i.service === s.id);
+                  return (
+                    <tr key={s.id} className={hot ? 'is-anom' : ''}>
+                      <td className="mono">
+                        {hot && <span className="dot live t-signal" style={{ marginRight: 8 }} />}
+                        {s.id}
+                      </td>
+                      <td className="hide-sm">
+                        <span className="tag">{s.stage}</span>
+                      </td>
+                      <td className="num">{fmtNum(st.count)}</td>
+                      <td className="num">{st.errors}</td>
+                      <td className="num" style={{ color: st.anomalies ? 'var(--signal)' : undefined }}>
+                        {st.anomalies}
+                      </td>
+                      <td className="num">{st.latency.toFixed(0)}ms</td>
+                      <td className="num" style={{ color: scoreColor(st.score, settings.threshold) }}>
+                        {st.score.toFixed(3)}
+                      </td>
+                      <td className="hide-sm" style={{ width: 140 }}>
+                        <svg viewBox="0 0 120 24" style={{ width: 120, height: 24, display: 'block' }}>
+                          {st.history.map((v, i) => (
+                            <rect key={i} x={i * 3} width={2} y={24 - Math.max(1, (v - 0.3) * 48)} height={Math.max(1, (v - 0.3) * 48)} fill={v >= settings.threshold ? 'var(--signal)' : 'var(--line-3)'} />
+                          ))}
+                        </svg>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+      <AnimatePresence>
+        {detail && <LogDetail key="d" log={detail} onClose={() => setDetail(null)} />}
+        {infer && <Inference key="i" onClose={() => setInfer(false)} />}
+      </AnimatePresence>
     </section>
   );
-};
-
-export default Dashboard;
+}

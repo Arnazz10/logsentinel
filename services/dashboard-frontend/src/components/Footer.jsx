@@ -1,97 +1,59 @@
 import { Link } from 'react-router-dom';
-import { Activity, Code2, ShieldCheck, Terminal, TrendingUp, Workflow } from 'lucide-react';
+import { BrandMark } from './ui';
+import { useLive } from '../lib/store';
+import { fmtNum } from '../lib/engine';
 
-const groups = [
-  {
-    title: 'Product',
-    links: [
-      ['Home', '/'],
-      ['Pipelines', '/pipelines'],
-      ['Dashboard', '/dashboard'],
-      ['Analytics', '/analytics'],
-      ['Rankings', '/rank'],
-    ],
-  },
-  {
-    title: 'Platform',
-    links: [
-      ['Features', '/features'],
-      ['Workflow', '/workflow'],
-      ['Security', '/security'],
-      ['API Docs', '/api-docs'],
-      ['Open Console', '/console'],
-    ],
-  },
-  {
-    title: 'Operations',
-    links: [
-      ['Kafka Ingest', '/workflow'],
-      ['Anomaly Model', '/features'],
-      ['Alert Routing', '/settings'],
-      ['Health Checks', '/api-docs'],
-      ['Workspace Settings', '/settings'],
-    ],
-  },
-];
-
-const Footer = () => (
-  <footer className="footer">
-    <div className="container">
-      <div className="footer-grid">
-        <div>
-          <Link to="/" className="brand">
-            <span className="brand-badge">LS</span>
-            <span>LogSentinel</span>
-          </Link>
-          <p style={{ marginTop: 14, color: 'var(--muted)', fontSize: '0.92rem', lineHeight: 1.6 }}>
-            Cloud-native log ingestion, AI anomaly scoring, alert routing, and
-            operator workflows in one real-time dashboard.
-          </p>
-          <div className="row-actions" style={{ marginTop: 16, gap: 8 }}>
-            <Link className="icon-ghost" to="/dashboard" aria-label="Live dashboard" title="Live dashboard">
-              <Activity size={17} />
-            </Link>
-            <Link className="icon-ghost" to="/security" aria-label="Security" title="Security">
-              <ShieldCheck size={17} />
-            </Link>
-            <Link className="icon-ghost" to="/console" aria-label="Console" title="Open Console">
-              <Terminal size={17} />
-            </Link>
-            <Link className="icon-ghost" to="/pipelines" aria-label="Pipelines" title="Pipelines">
-              <Workflow size={17} />
-            </Link>
-            <Link className="icon-ghost" to="/rank" aria-label="Rank" title="Rankings">
-              <TrendingUp size={17} />
-            </Link>
-            <a className="icon-ghost" href="https://github.com/Arnazz10/logsentinel" aria-label="Source repository" title="GitHub" target="_blank" rel="noopener noreferrer">
-              <Code2 size={17} />
-            </a>
+export default function Footer() {
+  const { totals } = useLive();
+  return (
+    <footer className="footer">
+      <div className="wrap">
+        <div className="footer-grid">
+          <div>
+            <div className="brand" style={{ marginBottom: 14 }}>
+              <BrandMark /> LogSentinel
+            </div>
+            <p className="muted" style={{ fontSize: 13.5, maxWidth: 320, margin: 0 }}>
+              Kafka-backed log ingestion, Isolation Forest anomaly scoring and alert routing — built to run on Kubernetes.
+            </p>
+            <p className="label" style={{ marginTop: 20 }}>
+              this session · <b>{fmtNum(totals.processed)}</b> logs scored · <b className="t-signal">{totals.anomalies}</b> flagged
+            </p>
+          </div>
+          <div>
+            <h5>Operate</h5>
+            <ul>
+              <li><Link to="/live">Live</Link></li>
+              <li><Link to="/incidents">Incidents</Link></li>
+              <li><Link to="/pipelines">Pipelines</Link></li>
+              <li><Link to="/console">Console</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h5>Understand</h5>
+            <ul>
+              <li><Link to="/analytics">Analytics</Link></li>
+              <li><Link to="/lab">Detector lab</Link></li>
+              <li><Link to="/workflow">How it works</Link></li>
+              <li><Link to="/features">Features</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h5>Build</h5>
+            <ul>
+              <li><Link to="/api-docs">API reference</Link></li>
+              <li><Link to="/security">Security</Link></li>
+              <li><Link to="/settings">Settings</Link></li>
+              <li><a href="https://github.com/Arnazz10/logsentinel" target="_blank" rel="noreferrer">GitHub ↗</a></li>
+            </ul>
           </div>
         </div>
-
-        {groups.map((group) => (
-          <div key={group.title}>
-            <h4>{group.title}</h4>
-            <div className="footer-links">
-              {group.links.map(([label, to]) => (
-                <Link key={label} to={to}>
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        ))}
+        <div className="footer-word" aria-hidden="true">logsentinel</div>
+        <div className="footer-bottom">
+          <span>© 2026 Arnab Mal · MIT licensed</span>
+          <span>FastAPI · Kafka · Elasticsearch · scikit-learn · Kubernetes · Terraform</span>
+        </div>
       </div>
-
-      <div className="footer-bottom">
-        <span>© 2026 LogSentinel Platform. Built for live service operations.</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--green)', boxShadow: '0 0 10px var(--green)' }} />
-          All systems operational
-        </span>
-      </div>
-    </div>
-  </footer>
-);
-
-export default Footer;
+    </footer>
+  );
+}

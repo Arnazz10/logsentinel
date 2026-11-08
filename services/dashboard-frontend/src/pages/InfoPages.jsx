@@ -1,207 +1,161 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  Activity,
-  ArrowRight,
-  BellRing,
-  Cpu,
-  Database,
-  GitBranch,
-  KeyRound,
-  Layers,
-  LockKeyhole,
-  Radio,
-  ServerCog,
-  ShieldCheck,
-  Workflow as WorkflowIcon,
-  Zap,
-  Terminal,
-  PieChart,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { PageHead, Scene } from '../components/ui';
 
-const PageHeader = ({ title, subtitle }) => (
-  <motion.header
-    initial={{ opacity: 0, y: 14 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="page-header"
-  >
-    <p className="eyebrow">LogSentinel platform</p>
-    <h1>{title}</h1>
-    <p>{subtitle}</p>
-  </motion.header>
+/* Hand-drawn line glyphs — one per feature, no icon-library look. */
+const G = {
+  stream: <path d="M4 14h8M4 22h14M4 30h10M22 14h18M26 22h14M22 30h18" />,
+  forest: <path d="M22 6v32M22 14l-8 8M22 14l8 8M14 22l-5 6M14 22l4 7M30 22l-4 7M30 22l5 6" />,
+  incident: <path d="M6 32h32M10 32V18M18 32V10M26 32V22M34 32V14M30 8l4 6 4-6" />,
+  cube: <path d="M22 5l15 8v18l-15 8-15-8V13zM7 13l15 8 15-8M22 21v18" />,
+  key: <path d="M14 22a6 6 0 1 0 0 .1M20 22h18M32 22v6M36 22v4" />,
+  term: <path d="M6 8h32v28H6zM11 16l5 5-5 5M19 27h10" />,
+};
+const Glyph = ({ k }) => (
+  <svg className="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.2">
+    {G[k]}
+  </svg>
 );
 
-const FeatureCard = ({ icon, title, desc, to }) => (
-  <motion.article
-    className="feature-card"
-    initial={{ opacity: 0, y: 18 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, amount: 0.2 }}
-    transition={{ duration: 0.45 }}
-  >
-    <span className="icon-box">{icon}</span>
-    <h3>{title}</h3>
-    <p>{desc}</p>
-    {to && (
-      <Link className="learn-more" to={to}>
-        Learn more <ArrowRight size={14} />
-      </Link>
-    )}
-  </motion.article>
-);
-
-const features = [
-  [<Radio size={24} />, 'Live log ingestion', 'Stream single logs or batches into Kafka-backed ingestion with schema validation and service tagging.', '/workflow'],
-  [<Cpu size={24} />, 'AI anomaly detection', 'Isolation Forest scoring flags unusual latency, error bursts, retry storms, and suspicious request shapes.', '/workflow'],
-  [<BellRing size={24} />, 'Alert routing', 'Deduplicate anomalies and route critical events to Slack, email, PagerDuty, or your internal webhook.', '/settings'],
-  [<Activity size={24} />, 'Service health timeline', 'Track throughput, anomaly rate, error budget burn, and rolling service status from one console.', '/rank'],
-  [<Database size={24} />, 'Searchable retention', 'Persist structured logs for root cause analysis, audit review, and trend comparisons.', '/analytics'],
-  [<Layers size={24} />, 'Operator dashboard', 'Correlate raw logs, scored anomalies, source clusters, and remediation actions without switching tools.', '/dashboard'],
-];
-
-const workflow = [
-  ['01', 'Collect', 'Agents, Fluent Bit, or the REST API submit structured service logs.'],
-  ['02', 'Validate', 'The API normalizes severity, timestamps, host metadata, response time, and error codes.'],
-  ['03', 'Stream', 'Kafka buffers validated events so processors can scale without dropping traffic.'],
-  ['04', 'Score', 'The ML worker enriches records and scores anomalies against Isolation Forest baselines.'],
-  ['05', 'Alert', 'Rules combine model output, severity, and service context before notifying responders.'],
-  ['06', 'Investigate', 'Operators jump from anomalies to raw logs, related services, and API traces.'],
-];
-
-const security = [
-  [<ShieldCheck size={24} />, 'Defense by default', 'TLS for transport, scoped API keys, service identity checks, and least-privilege deployment boundaries.'],
-  [<LockKeyhole size={24} />, 'Sensitive data control', 'PII redaction hooks and retention policies keep logs useful without exposing secrets.'],
-  [<KeyRound size={24} />, 'Keyed API access', 'Every ingestion endpoint is designed for API-key authentication and audit-friendly ownership.'],
-  [<ServerCog size={24} />, 'Operational hardening', 'Health checks, rate limits, and alert deduplication reduce noisy failures during incidents.'],
+const FEATURES = [
+  ['stream', 'Streaming ingest', 'FastAPI → Kafka with batching, schema validation and back-pressure. Producers never wait on Elasticsearch.', '/pipelines'],
+  ['forest', 'Unsupervised detection', 'Isolation Forest needs no labelled incidents. It learns “normal” from the stream itself and flags what isolates quickly.', '/lab'],
+  ['incident', 'Incident correlation', 'Bursts of anomalies on one service collapse into a single incident with a timeline, MTTA/MTTR and a post-mortem stub.', '/incidents'],
+  ['cube', '3D observability', 'Pipeline topology, log terrain and feature-space views rendered with three.js — same data as the tables, different angle.', '/live'],
+  ['key', 'Secure by default', 'API-key auth, non-root containers, network policies and secrets kept out of images.', '/security'],
+  ['term', 'Operator console', 'A shell over the live store: tail, score ad-hoc vectors, inject faults, ack and resolve without leaving the keyboard.', '/console'],
 ];
 
 export const Features = () => (
   <section className="page">
-    <div className="container">
-      <PageHeader
-        title="Everything needed to see, score, and resolve log anomalies."
-        subtitle="A complete operations surface for ingestion, machine-learning detection, live dashboards, and response workflows."
-      />
-
-      <div className="kpi-grid" style={{ marginBottom: 32 }}>
-        {[
-          [<Terminal size={22} />, 'Live console', 'Browse /console with a working CLI and multi-cluster switching'],
-          [<PieChart size={22} />, 'Full analytics', 'Hourly throughput, anomaly heatmaps, service distribution charts'],
-          [<WorkflowIcon size={22} />, 'Pipeline view', 'Per-service uptime, anomaly trend deltas, throughput leaderboard'],
-          [<ShieldCheck size={22} />, 'Security ready', 'Scoped API keys, PII redaction, webhook signing'],
-        ].map(([icon, label, desc], i) => (
-          <div key={label} className="kpi">
-            <div className="kpi-icon">{icon}</div>
-            <span className="kpi-label">{label}</span>
-            <span className="kpi-value" style={{ fontSize: '0.92rem', fontWeight: 600, letterSpacing: 0 }}>{desc}</span>
-          </div>
-        ))}
-      </div>
-
+    <div className="wrap">
+      <PageHead
+        index="—"
+        kicker="features"
+        title={
+          <>
+            What’s in the <em>box</em>
+          </>
+        }
+      >
+        Six things LogSentinel does, each linked to the page where you can watch it happen.
+      </PageHead>
       <div className="feature-grid">
-        {features.map(([icon, title, desc, to]) => (
-          <FeatureCard key={title} icon={icon} title={title} desc={desc} to={to} />
+        {FEATURES.map(([k, t, d, to], i) => (
+          <Link key={t} to={to} className="feature">
+            <div className="n">
+              <span>{String(i + 1).padStart(2, '0')}</span>
+              <ArrowRight size={13} />
+            </div>
+            <div style={{ marginTop: 28 }}>
+              <Glyph k={k} />
+            </div>
+            <h4 style={{ marginTop: 18 }}>{t}</h4>
+            <p>{d}</p>
+          </Link>
         ))}
       </div>
     </div>
   </section>
 );
+
+const STEPS = [
+  ['log-collector', 'Tails files / receives syslog, batches and POSTs JSON to the ingestion API.'],
+  ['log-ingestion-api', 'Validates with Pydantic, stamps log_id + ingested_at, publishes to raw-logs.'],
+  ['log-processor', 'Consumer group: normalises, encodes features, bulk-indexes into Elasticsearch, republishes to processed-logs.'],
+  ['ml-engine', 'Scores each record with Isolation Forest; anomalies go to anomaly-alerts.'],
+  ['alert-service', 'Dedupes via Redis, persists to PostgreSQL, routes to Slack / email.'],
+  ['dashboard-backend', 'Read API over Elasticsearch + Postgres for this UI and Grafana.'],
+];
 
 export const Workflow = () => (
   <section className="page">
-    <div className="container">
-      <PageHeader
-        title="From raw service log to actionable incident."
-        subtitle="LogSentinel keeps the pipeline clear: collect, validate, stream, score, alert, investigate."
-      />
-      <div className="workflow-list">
-        {workflow.map(([num, title, desc], i) => (
-          <motion.article
-            key={title}
-            className="workflow-step"
-            initial={{ opacity: 0, x: -12 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ delay: i * 0.06 }}
-          >
-            <span className="step-num">{num}</span>
-            <div>
-              <h3>{title}</h3>
-              <p>{desc}</p>
-            </div>
-            <ArrowRight size={22} />
-          </motion.article>
-        ))}
+    <div className="wrap">
+      <PageHead
+        index="—"
+        kicker="how it works"
+        title={
+          <>
+            One log’s <em>journey</em>
+          </>
+        }
+      >
+        Follow the amber packets: that’s each record moving through the real service graph. Red ones are scored anomalous and diverted to
+        alerting.
+      </PageHead>
+      <div className="panel ticks" style={{ overflow: 'hidden' }}>
+        <Scene kind="topology" height={520} hud={<><span>live topology</span><span>move pointer to tilt</span></>} />
       </div>
-      <div style={{ marginTop: 42, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Link to="/console" className="pill-button primary">
-          <Terminal size={16} /> Try the CLI console
-        </Link>
-        <Link to="/api-docs" className="pill-button">
-          Read the API <ArrowRight size={16} />
-        </Link>
+      <div className="stages stages-3 mt-24">
+        {STEPS.map(([svc, d], i) => (
+          <div key={svc} className="stage" style={{ minHeight: 180 }}>
+            <div className="n">step {String(i + 1).padStart(2, '0')}</div>
+            <h4 className="mono" style={{ marginTop: 24, fontSize: 16 }}>
+              {svc}
+            </h4>
+            <p>{d}</p>
+          </div>
+        ))}
       </div>
     </div>
   </section>
 );
 
+const CONTROLS = [
+  ['Transport', 'TLS 1.3 at the ingress; mTLS between pods via the service mesh.'],
+  ['Authentication', 'X-API-Key on ingestion and ML APIs; keys rotated through Kubernetes secrets.'],
+  ['Isolation', 'Non-root containers, read-only root FS, NetworkPolicies deny pod-to-pod by default.'],
+  ['Data', 'PII fields can be hashed at ingestion; Elasticsearch indices are encrypted at rest (EBS KMS).'],
+  ['Supply chain', 'Pinned base images, Trivy scan in the Jenkins pipeline, Terraform plans reviewed before apply.'],
+  ['Audit', 'Every acknowledge / resolve is written to the incident timeline and alert_history table.'],
+];
+
 export const Security = () => (
   <section className="page">
-    <div className="container">
-      <PageHeader
-        title="Security controls for high-volume operational data."
-        subtitle="LogSentinel is designed around protected ingestion, scoped access, safer retention, and reliable incident handling."
+    <div className="wrap">
+      <PageHead
+        index="—"
+        kicker="security"
+        title={
+          <>
+            Defence in <em>layers</em>
+          </>
+        }
       />
-      <div className="feature-grid">
-        {security.map(([icon, title, desc]) => (
-          <FeatureCard key={title} icon={icon} title={title} desc={desc} />
-        ))}
+      <div className="grid g-main" style={{ alignItems: 'start' }}>
+        <div className="panel ticks" style={{ overflow: 'hidden' }}>
+          <Scene kind="lattice" height={520} />
+        </div>
+        <table className="spec">
+          <tbody>
+            {CONTROLS.map(([k, v]) => (
+              <tr key={k}>
+                <td style={{ width: 140 }}>{k}</td>
+                <td style={{ fontSize: 15, textAlign: 'left', fontFamily: 'var(--sans)', color: 'var(--text)', display: 'table-cell' }}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div className="workflow-list" style={{ marginTop: 24 }}>
-        <motion.article
-          className="workflow-step"
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <span className="icon-box">
-            <GitBranch size={24} />
-          </span>
-          <div>
-            <h3>Recommended deployment path</h3>
-            <p>
-              Put ingestion behind your API gateway, issue per-service API keys,
-              keep Kafka private, and expose the dashboard through your existing
-              SSO boundary.
-            </p>
-          </div>
-          <WorkflowIcon size={24} />
-        </motion.article>
-        <motion.article
-          className="workflow-step"
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.08 }}
-        >
-          <span className="icon-box">
-            <Zap size={24} />
-          </span>
-          <div>
-            <h3>Incident response posture</h3>
-            <p>
-              Critical anomalies stay visible in the dashboard and console while
-              alert webhooks carry the service, score, timestamp, and related log context.
-            </p>
-          </div>
-          <ShieldCheck size={24} />
-        </motion.article>
+    </div>
+  </section>
+);
+
+export const NotFound = () => (
+  <section className="page">
+    <div className="wrap" style={{ paddingTop: 80 }}>
+      <div className="label">
+        <span className="t-signal">404</span> / route not found
       </div>
-      <div style={{ marginTop: 38 }}>
-        <Link to="/settings" className="pill-button primary">
-          <KeyRound size={16} /> Configure security settings
-        </Link>
-      </div>
+      <h1 className="display" style={{ marginTop: 20 }}>
+        This path scored <em>1.000</em>.
+      </h1>
+      <p className="lede" style={{ marginTop: 20 }}>
+        Nothing here looks like normal traffic. Probably a mistyped URL.
+      </p>
+      <Link to="/" className="btn primary mt-24">
+        Back to overview <ArrowRight size={14} />
+      </Link>
     </div>
   </section>
 );

@@ -1,483 +1,217 @@
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  BellRing,
-  Database,
-  Eye,
-  Layers,
-  PieChart as PieChartIcon,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
+import { useMemo, useState } from 'react';
+import { AreaChart, PageHead, Readout, Scene } from '../components/ui';
+import { LEVELS, SERVICES, fmtNum } from '../lib/engine';
+import { useLive } from '../lib/store';
 
-const hourlyLogs = [
-  320, 480, 290, 620, 410, 870, 530, 680, 370, 210, 580, 470, 710, 540, 820,
-  610, 430, 290, 760, 520, 640, 490, 810, 370,
-];
-const hourlyAnom = [
-  8, 12, 5, 22, 14, 38, 24, 28, 11, 6, 30, 19, 41, 22, 35, 18, 13, 7, 34, 21,
-  29, 16, 39, 12,
-];
-
-const levels = [
-  ["INFO", 68, "rgba(79,169,255,0.85)"],
-  ["WARN", 18, "rgba(247,185,85,0.85)"],
-  ["ERROR", 10, "rgba(255,90,106,0.85)"],
-  ["DEBUG", 4, "rgba(108,139,255,0.85)"],
-];
-
-const serviceDist = [
-  ["gateway", 24, "#4fa9ff"],
-  ["auth-api", 18, "#6ab7ff"],
-  ["ml-engine", 15, "#a78bfa"],
-  ["payment-svc", 14, "#3fd2ff"],
-  ["data-services", 11, "#3ddc97"],
-  ["db-master", 9, "#f7b955"],
-  ["alert-mgr", 6, "#ff9a52"],
-  ["edge-proxy", 3, "#ff5a6a"],
-];
+const levelColor = { DEBUG: 'var(--dim)', INFO: 'var(--steel)', WARN: 'var(--amber)', ERROR: 'var(--signal)', CRITICAL: '#ff2a1a' };
 
 export default function Analytics() {
-  const [logs, setLogs] = useState(hourlyLogs);
-  const [anoms, setAnoms] = useState(hourlyAnom);
-  const [range, setRange] = useState("24h");
-  const [kpi, setKpi] = useState({
-    ingest: 148520,
-    anomaly: 2847,
-    latency: 18,
-    uptime: 99.94,
-  });
+  const { logs, series, svcStats, totals, settings } = useLive();
+  const [win, setWin] = useState(60);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setLogs((curr) => {
-        const next = [...curr.slice(1)];
-        next.push(
-          Math.max(
-            80,
-            curr[curr.length - 1] + Math.floor((Math.random() - 0.4) * 120),
-          ),
-        );
-        return next;
-      });
-      setAnoms((curr) => {
-        const next = [...curr.slice(1)];
-        next.push(
-          Math.max(
-            2,
-            curr[curr.length - 1] + Math.floor((Math.random() - 0.5) * 8),
-          ),
-        );
-        return next;
-      });
-      setKpi((k) => ({
-        ingest: k.ingest + Math.floor(Math.random() * 120),
-        anomaly: k.anomaly + (Math.random() > 0.7 ? 1 : 0),
-        latency: Math.max(4, k.latency + Math.floor((Math.random() - 0.5) * 4)),
-        uptime: Math.max(
-          99.7,
-          Math.min(99.999, k.uptime + (Math.random() - 0.5) * 0.01),
-        ),
-      }));
-    }, 2500);
-    return () => clearInterval(id);
-  }, []);
+  const s = series.slice(-win);
+  const perSec = settings.tickMs / 1000;
+  const chartSeries = s.map((p) => ({ total: p.total / perSec, anomalies: p.anomalies / perSec }));
 
-  const maxLog = Math.max(...logs);
-  const totalAnom = anoms.reduce((s, x) => s + x, 0);
-  const totalLogs = logs.reduce((s, x) => s + x, 0);
+  const levels = useMemo(() => {
+    const c = Object.fromEntries(LEVELS.map((l) => [l, 0]));
+    logs.forEach((l) => (c[l.level] = (c[l.level] || 0) + 1));
+    return c;
+  }, [logs]);
+  const lvTotal = Object.values(levels).reduce((a, b) => a + b, 0) || 1;
 
-  // Build pie segments
-  let cumPct = 0;
-  const pctPie = levels.map(([label, pct, color]) => {
-    const start = cumPct;
-    cumPct += pct;
-    return { label, pct, color, start };
-  });
+  // service × 10s bucket heatmap of anomaly score.
+  const heat = useMemo(() => {
+    const now = Date.now();
+    const COLS = 18;
+    const grid = SERVICES.map(() => Array(COLS).fill(0));
+    logs.forEach((l) => {
+      const b = COLS - 1 - Math.floor((now - l.ts) / 10000);
+      if (b < 0) return;
+      const r = SERVICES.findIndex((x) => x.id === l.service);
+      if (r >= 0) grid[r][b] = Math.max(grid[r][b], l.score);
+    });
+    return grid;
+  }, [logs]);
+
+  const lat = useMemo(() => {
+    const bins = Array(24).fill(0);
+    logs.forEach((l) => (bins[Math.min(23, Math.max(0, Math.floor(Math.log10(Math.max(1, l.latency)) * 6)))] += 1));
+    return bins;
+  }, [logs]);
+  const latMax = Math.max(1, ...lat);
+
+  const ranked = SERVICES.map((x) => ({ id: x.id, ...svcStats[x.id], rate: svcStats[x.id].count ? (svcStats[x.id].anomalies / svcStats[x.id].count) * 100 : 0 })).sort((a, b) => b.rate - a.rate);
+  const maxRate = Math.max(1, ...ranked.map((r) => r.rate));
+
+  // Donut
+  const R = 54;
+  const offsets = LEVELS.map((_, i) => LEVELS.slice(0, i).reduce((a, l) => a + levels[l] / lvTotal, 0));
+  const circ = 2 * Math.PI * R;
 
   return (
     <section className="page">
-      <div className="container">
-        {/* Header */}
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">Analytics</p>
-            <h1>Log Analytics Overview</h1>
-            <p>
-              Hourly throughput, anomaly patterns, level distribution and
-              service breakdown.
-            </p>
-          </div>
-          <div className="row-actions">
-            <div className="tab-list" style={{ gap: 4 }}>
-              {["1h", "6h", "24h", "7d"].map((r) => (
-                <button
-                  key={r}
-                  className={`tab-button ${range === r ? "active" : ""}`}
-                  onClick={() => setRange(r)}
-                  type="button"
-                >
-                  {r}
+      <div className="wrap">
+        <PageHead
+          index="05"
+          kicker="analytics"
+          title={
+            <>
+              What the stream <em>looks like</em>
+            </>
+          }
+          actions={
+            <div className="seg">
+              {[30, 60, 120].map((w) => (
+                <button key={w} className={win === w ? 'on' : ''} onClick={() => setWin(w)}>
+                  {w}s
                 </button>
               ))}
             </div>
-            <button className="pill-button primary">
-              <BarChart3 size={15} /> Export
-            </button>
-          </div>
-        </header>
+          }
+        />
 
-        {/* KPI row */}
-        <div className="kpi-grid" style={{ marginBottom: 18 }}>
-          <div className="kpi">
-            <div className="kpi-icon">
-              <Database size={20} />
+        <div className="strip" style={{ '--n': 4 }}>
+          <Readout label="logs scored" value={fmtNum(totals.processed)} />
+          <Readout label="anomalies" value={totals.anomalies} color="var(--signal)" sub={`${totals.processed ? ((totals.anomalies / totals.processed) * 100).toFixed(2) : 0}% of traffic`} />
+          <Readout label="false alarms" value={totals.fp} color="var(--amber)" sub="flagged organic logs" />
+          <Readout label="missed faults" value={totals.fn} sub="injected, scored below threshold" />
+        </div>
+
+        <div className="grid g-main mt-12">
+          <div className="panel">
+            <div className="panel-head">
+              <h3>
+                <span className="idx">A</span> Throughput vs anomalies
+              </h3>
+              <span className="label">
+                <span className="t-steel">■</span> rec/s &nbsp; <span className="t-signal">■</span> anomalies/s
+              </span>
             </div>
-            <span className="kpi-label">Logs ingested ({range})</span>
-            <span className="kpi-value">{kpi.ingest.toLocaleString()}</span>
-            <span className="kpi-delta up">
-              <TrendingUp size={11} /> +12.4% vs last
-            </span>
+            <div className="panel-body">
+              <AreaChart series={chartSeries} keys={['total', 'anomalies']} colors={['var(--steel)', 'var(--signal)']} height={260} labels={[`-${win}s`, `-${Math.round(win / 2)}s`, 'now']} />
+            </div>
           </div>
-          <div className="kpi">
-            <div className="kpi-icon">
-              <AlertTriangle size={20} />
+          <div className="panel">
+            <div className="panel-head">
+              <h3>
+                <span className="idx">B</span> Level mix
+              </h3>
+              <span className="label">last {logs.length} logs</span>
             </div>
-            <span className="kpi-label">Anomalies ({range})</span>
-            <span className="kpi-value">{kpi.anomaly.toLocaleString()}</span>
-            <span className="kpi-delta down">
-              <TrendingDown size={11} /> −3.2% vs last
-            </span>
-          </div>
-          <div className="kpi">
-            <div className="kpi-icon">
-              <Zap size={20} />
+            <div className="panel-body row" style={{ gap: 24, alignItems: 'center' }}>
+              <svg viewBox="0 0 140 140" style={{ width: 160, flexShrink: 0 }}>
+                <circle cx="70" cy="70" r={R} fill="none" stroke="var(--line)" strokeWidth="14" />
+                {LEVELS.map((l, i) => (
+                  <circle key={l} cx="70" cy="70" r={R} fill="none" stroke={levelColor[l]} strokeWidth="14" strokeDasharray={`${(levels[l] / lvTotal) * circ} ${circ}`} strokeDashoffset={-offsets[i] * circ} transform="rotate(-90 70 70)" />
+                ))}
+                <text x="70" y="68" textAnchor="middle" className="axis-t" style={{ fontSize: 18, fill: 'var(--text)' }}>
+                  {(((levels.ERROR + levels.CRITICAL) / lvTotal) * 100).toFixed(1)}%
+                </text>
+                <text x="70" y="84" textAnchor="middle" className="axis-t" style={{ fontSize: 8 }}>
+                  err+crit
+                </text>
+              </svg>
+              <div style={{ display: 'grid', gap: 8, flex: 1 }}>
+                {LEVELS.map((l) => (
+                  <div key={l} className="row between mono" style={{ fontSize: 12 }}>
+                    <span className="row" style={{ gap: 8 }}>
+                      <span style={{ width: 8, height: 8, background: levelColor[l] }} />
+                      {l}
+                    </span>
+                    <span className="muted">{levels[l]}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <span className="kpi-label">Avg ingest latency</span>
-            <span className="kpi-value">{kpi.latency}ms</span>
-            <span className="kpi-delta up">
-              <TrendingUp size={11} /> p95 42ms
-            </span>
-          </div>
-          <div className="kpi">
-            <div className="kpi-icon">
-              <ShieldCheck size={20} />
-            </div>
-            <span className="kpi-label">Pipeline uptime</span>
-            <span className="kpi-value">{kpi.uptime.toFixed(3)}%</span>
-            <span className="kpi-delta up">
-              <Eye size={11} /> 1 incident
-            </span>
           </div>
         </div>
 
-        {/* Charts row 1 */}
-        <div className="ops-grid" style={{ marginBottom: 16 }}>
-          {/* Bar chart */}
-          <section className="panel">
+        <div className="grid g-2 mt-12">
+          <div className="panel ticks" style={{ overflow: 'hidden' }}>
             <div className="panel-head">
-              <h2>
-                <Activity size={18} /> Log throughput · anomalies ({range})
-              </h2>
-              <span className="status-pill">Live</span>
+              <h3>
+                <span className="idx">C</span> Feature space
+              </h3>
+              <span className="label">latency × error rate × payload</span>
             </div>
-            <div
-              style={{
-                position: "relative",
-                height: 240,
-                padding: "18px 6px 28px",
-              }}
-            >
-              <div className="big-chart">
-                {logs.map((v, i) => (
-                  <motion.div
-                    key={`l-${i}`}
-                    className="big-bar log"
-                    style={{ height: `${(v / maxLog) * 100}%` }}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.015 }}
-                    title={`${logs[i]} logs · ${anoms[i]} anomalies`}
-                  />
-                ))}
-              </div>
-              <div className="big-chart overlay">
-                {anoms.map((v, i) => (
-                  <motion.div
-                    key={`a-${i}`}
-                    className="big-bar anomaly"
-                    style={{ height: `${(v / 45) * 100}%` }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.015 + 0.08 }}
-                  />
-                ))}
-              </div>
-              <div className="chart-labels">
-                <span>00:00</span>
-                <span>06:00</span>
-                <span>12:00</span>
-                <span>18:00</span>
-                <span>23:59</span>
-              </div>
-            </div>
-            <div className="legend-row" style={{ paddingLeft: 6 }}>
-              <span className="legend">
-                <i
-                  style={{
-                    background: "linear-gradient(180deg,#4fa9ff,#2a7aff)",
-                  }}
-                />
-                Log throughput
-              </span>
-              <span className="legend">
-                <i
-                  style={{
-                    background: "linear-gradient(180deg,#ff9a52,#ff5a6a)",
-                  }}
-                />
-                Anomalies
-              </span>
-            </div>
-          </section>
-
-          {/* Pie chart */}
-          <section className="panel">
+            <Scene kind="cloud" height={400} />
+          </div>
+          <div className="panel">
             <div className="panel-head">
-              <h2>
-                <PieChartIcon size={18} /> Level distribution
-              </h2>
-              <span className="status-pill">
-                {totalLogs.toLocaleString()} events
-              </span>
+              <h3>
+                <span className="idx">D</span> Anomaly heatmap
+              </h3>
+              <span className="label">max score · 10s buckets · 3 min</span>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "160px 1fr",
-                gap: 24,
-                alignItems: "center",
-                padding: "8px 0",
-              }}
-            >
-              {/* Donut */}
-              <div style={{ position: "relative", width: 160, height: 160 }}>
-                <svg viewBox="0 0 42 42" width="160" height="160">
-                  <circle
-                    cx="21"
-                    cy="21"
-                    r="15.9"
-                    fill="none"
-                    stroke="rgba(110,160,255,0.08)"
-                    strokeWidth="6"
-                  />
-                  {pctPie.map(({ label, pct, color, start }) => {
-                    const dashArray = `${pct * 0.995} ${100 - pct}`;
-                    const dashOffset = 25 - start * 0.995;
-                    return (
-                      <circle
-                        key={label}
-                        cx="21"
-                        cy="21"
-                        r="15.9"
-                        fill="transparent"
-                        strokeWidth="6"
-                        stroke={color}
-                        strokeDasharray={dashArray}
-                        strokeDashoffset={dashOffset}
-                        transform="rotate(-90 21 21)"
-                        strokeLinecap="butt"
+            <div className="panel-body">
+              {heat.map((row, r) => (
+                <div key={SERVICES[r].id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 10, alignItems: 'center', marginBottom: 3 }}>
+                  <span className="mono dim" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {SERVICES[r].id}
+                  </span>
+                  <div className="heat" style={{ gridTemplateColumns: `repeat(${row.length}, 1fr)` }}>
+                    {row.map((v, c) => (
+                      <div
+                        key={c}
+                        className="cell"
+                        title={v ? v.toFixed(3) : 'no data'}
+                        style={{
+                          background: !v ? 'var(--bg-2)' : v >= settings.threshold ? 'var(--signal)' : `rgba(242,179,61,${Math.max(0.06, (v - 0.35) * 2.4)})`,
+                        }}
                       />
-                    );
-                  })}
-                </svg>
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "grid",
-                    placeItems: "center",
-                    textAlign: "center",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "1.45rem",
-                        fontWeight: 800,
-                        letterSpacing: "-0.03em",
-                        color: "#fff",
-                      }}
-                    >
-                      {((totalAnom / totalLogs) * 100).toFixed(2)}%
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.68rem",
-                        color: "var(--dim)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      anomaly rate
-                    </div>
+                    ))}
                   </div>
                 </div>
-              </div>
-
-              {/* Legend */}
-              <div className="pie-legend">
-                {levels.map(([label, pct, color]) => (
-                  <div key={label} className="pie-legend-row">
-                    <span>
-                      <i style={{ background: color, borderRadius: "50%" }} />
-                      {label}
-                    </span>
-                    <strong>{pct}%</strong>
-                    <div className="mini-bar">
-                      <div style={{ width: `${pct}%`, background: color }} />
-                    </div>
-                  </div>
-                ))}
+              ))}
+              <div className="row between label mt-12" style={{ paddingLeft: 110 }}>
+                <span>-3m</span>
+                <span>now</span>
               </div>
             </div>
-          </section>
+          </div>
         </div>
 
-        {/* Charts row 2 */}
-        <div className="ops-grid">
-          {/* Service distribution — FIXED: horizontal rows with bar */}
-          <section className="panel">
+        <div className="grid g-2 mt-12">
+          <div className="panel">
             <div className="panel-head">
-              <h2>
-                <Layers size={18} /> Service log share
-              </h2>
-              <span className="status-pill">Top 8</span>
+              <h3>
+                <span className="idx">E</span> Anomaly rate by service
+              </h3>
             </div>
-            <div className="service-dist-list">
-              {serviceDist.map(([svc, pct, color], i) => (
-                <motion.div
-                  key={svc}
-                  className="svc-row"
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                >
-                  <div className="svc-row-head">
-                    {/* Colored dot instead of large avatar */}
-                    <div
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: color,
-                        boxShadow: `0 0 8px ${color}`,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <strong>{svc}</strong>
-                    <span
-                      className="mini-chip"
-                      style={{
-                        marginLeft: "auto",
-                        color,
-                        background: `${color}18`,
-                        borderColor: `${color}35`,
-                      }}
-                    >
-                      {pct}%
-                    </span>
-                  </div>
-                  <div className="dist-bar">
-                    <div
-                      style={{
-                        width: `${pct * 4}%`,
-                        background: `linear-gradient(90deg, ${color}cc, ${color})`,
-                      }}
-                    />
-                  </div>
-                </motion.div>
+            <div className="panel-body bars-h">
+              {ranked.map((r) => (
+                <div key={r.id} className="row">
+                  <span className="n">{r.id}</span>
+                  <span className="track">
+                    <i className={r.rate > 5 ? 'hot' : ''} style={{ width: `${(r.rate / maxRate) * 100}%` }} />
+                  </span>
+                  <span className="v">{r.rate.toFixed(2)}%</span>
+                </div>
               ))}
             </div>
-          </section>
-
-          {/* Heatmap */}
-          <section className="panel">
+          </div>
+          <div className="panel">
             <div className="panel-head">
-              <h2>
-                <BellRing size={18} /> Anomaly heatmap
-              </h2>
-              <span className="status-pill">Day × Hour</span>
+              <h3>
+                <span className="idx">F</span> Latency distribution
+              </h3>
+              <span className="label">log scale</span>
             </div>
-            <div className="heatmap">
-              {Array.from({ length: 7 * 24 }).map((_, i) => {
-                const intensity = Math.random();
-                const color =
-                  intensity > 0.7
-                    ? "255,90,106"
-                    : intensity > 0.4
-                      ? "247,185,85"
-                      : "79,169,255";
-                return (
-                  <div
-                    key={i}
-                    className="heat-cell"
-                    style={{
-                      opacity: 0.12 + intensity * 0.88,
-                      background: `rgba(${color},0.9)`,
-                    }}
-                    title={`Intensity: ${Math.round(intensity * 100)}%`}
-                  />
-                );
-              })}
+            <div className="panel-body">
+              <svg viewBox="0 0 480 160" className="chart" style={{ height: 200 }}>
+                {lat.map((b, i) => (
+                  <rect key={i} x={i * 20 + 1} width={18} y={140 - (b / latMax) * 130} height={(b / latMax) * 130} fill={i >= 16 ? 'var(--signal)' : 'var(--steel)'} opacity="0.85" />
+                ))}
+                <line x1="0" x2="480" y1="140.5" y2="140.5" className="grid-l" />
+                {[1, 10, 100, 1000].map((v) => (
+                  <text key={v} className="axis-t" x={Math.log10(v) * 6 * 20} y="156">
+                    {v}ms
+                  </text>
+                ))}
+              </svg>
             </div>
-            <div className="heatmap-legend">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-            {/* Intensity legend */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 14,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "0.72rem",
-                  color: "var(--dim)",
-                  fontWeight: 600,
-                }}
-              >
-                Low
-              </span>
-              <div
-                style={{
-                  flex: 1,
-                  height: 5,
-                  borderRadius: 999,
-                  background:
-                    "linear-gradient(90deg, rgba(79,169,255,0.6), rgba(247,185,85,0.8), rgba(255,90,106,0.95))",
-                }}
-              />
-              <span
-                style={{
-                  fontSize: "0.72rem",
-                  color: "var(--dim)",
-                  fontWeight: 600,
-                }}
-              >
-                High
-              </span>
-            </div>
-          </section>
+          </div>
         </div>
       </div>
     </section>

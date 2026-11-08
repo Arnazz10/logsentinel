@@ -1,218 +1,195 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  Activity,
-  Check,
-  ChevronRight,
-  Copy,
-  KeyRound,
-  ShieldCheck,
-  Terminal,
-  Zap,
-  ArrowRight,
-} from 'lucide-react';
+import { Copy, Play } from 'lucide-react';
+import { PageHead } from '../components/ui';
+import { useLive } from '../lib/store';
 
-const endpoints = [
+const ENDPOINTS = [
   {
-    id: 'ingest',
-    method: 'POST',
-    path: '/ingest',
-    title: 'Single log ingestion',
-    body: 'Send one structured log event into the LogSentinel ingestion pipeline.',
-    request: `{
-  "service": "auth-service",
+    group: 'log-ingestion-api · :8000',
+    items: [
+      {
+        m: 'POST',
+        path: '/ingest',
+        desc: 'Validate and publish a single log entry to the raw-logs topic.',
+        body: `{
+  "service": "payment-svc",
   "level": "ERROR",
-  "message": "Database connection timeout after 5000ms",
-  "response_time_ms": 4500,
-  "error_code": 503,
-  "host": "pod-auth-7f9d"
+  "message": "stripe timeout after 4200ms",
+  "host": "pay-7f9c",
+  "response_time_ms": 4200,
+  "error_code": 504
 }`,
-    response: `{
-  "accepted": true,
-  "topic": "raw-logs",
-  "event_id": "evt_01HVK8ZQ3A9"
-}`,
+        res: `{ "log_id": "4b1e…", "status": "accepted", "topic": "raw-logs" }`,
+      },
+      {
+        m: 'POST',
+        path: '/ingest/batch',
+        desc: 'Publish 1–100 entries in one request. Partial failures are reported per item.',
+        body: `{ "logs": [ { "service": "auth-api", "level": "INFO", "message": "login ok" } ] }`,
+        res: `{ "accepted": 1, "rejected": 0, "log_ids": ["…"] }`,
+      },
+      { m: 'GET', path: '/health', desc: 'Liveness + Kafka producer readiness.', res: `{ "status": "healthy", "kafka": "connected" }` },
+    ],
   },
   {
-    id: 'batch',
-    method: 'POST',
-    path: '/ingest/batch',
-    title: 'Batch ingestion',
-    body: 'Submit multiple log records in one request for high-throughput services.',
-    request: `{
-  "records": [
-    { "service": "gateway", "level": "INFO", "message": "GET /health 200" },
-    { "service": "payment", "level": "WARN", "message": "Retry storm detected" }
-  ]
+    group: 'ml-engine · :8001',
+    items: [
+      {
+        m: 'POST',
+        path: '/predict',
+        desc: 'Score one feature vector with the loaded Isolation Forest.',
+        body: `{
+  "hour_of_day": 14,
+  "response_time_ms": 2400,
+  "error_code": 500,
+  "log_level_encoded": 3,
+  "service_id_encoded": 4
 }`,
-    response: `{
-  "accepted": 2,
-  "rejected": 0,
-  "topic": "raw-logs"
-}`,
+        res: `{ "is_anomaly": true, "anomaly_score": -0.142, "model_version": "iforest-v3" }`,
+      },
+      { m: 'POST', path: '/predict/batch', desc: 'Score up to 1,000 vectors in one call.', body: `{ "vectors": [ … ] }`, res: `{ "results": [ … ], "anomalies": 3 }` },
+      { m: 'GET', path: '/model/status', desc: 'Model metadata: estimators, contamination, trained_at.', res: `{ "loaded": true, "n_estimators": 100, "contamination": 0.05 }` },
+    ],
   },
   {
-    id: 'health',
-    method: 'GET',
-    path: '/health',
-    title: 'Service health',
-    body: 'Check API, Kafka, model, and storage readiness before sending traffic.',
-    request: `curl -H "X-API-KEY: ls_prod_..." https://api.logsentinel.local/health`,
-    response: `{
-  "status": "ok",
-  "kafka": "connected",
-  "model": "loaded",
-  "latency_ms": 18
-}`,
-  },
-  {
-    id: 'predict',
-    method: 'POST',
-    path: '/predict',
-    title: 'Anomaly prediction',
-    body: 'Score a log-like payload against the current Isolation Forest model without storing it.',
-    request: `{
-  "service": "checkout",
-  "level": "WARN",
-  "message": "p95 latency crossed 1200ms",
-  "response_time_ms": 1200
-}`,
-    response: `{
-  "anomaly": true,
-  "score": -0.083,
-  "severity": "warning"
-}`,
+    group: 'dashboard-backend · :8080',
+    items: [
+      { m: 'GET', path: '/logs?size=20&level=ERROR&service=auth-api&q=timeout', desc: 'Paginated Elasticsearch query with filters and full-text search.', res: `{ "page": 1, "size": 20, "total": 812, "items": [ … ] }`, tryable: true },
+      { m: 'GET', path: '/anomalies?size=20', desc: 'Alerts persisted by alert-service in PostgreSQL.', res: `{ "page": 1, "total": 37, "items": [ … ] }`, tryable: true },
+      { m: 'GET', path: '/stats?window_minutes=60', desc: 'Aggregates: log rate, level and service breakdowns (cached in Redis).', res: `{ "logs_last_minute": 4120, "log_rate_per_second": 68.7, … }`, tryable: true },
+      { m: 'GET', path: '/health', desc: 'Elasticsearch, Postgres and Redis connectivity.', res: `{ "status": "healthy", "checks": { … } }`, tryable: true },
+    ],
   },
 ];
 
-const ApiDocs = () => {
-  const [active, setActive] = useState(endpoints[0].id);
-  const [copied, setCopied] = useState('');
-  const activeEndpoint = endpoints.find((endpoint) => endpoint.id === active) ?? endpoints[0];
+const curl = (e, base) => {
+  const host = e.path.startsWith('/predict') || e.path.startsWith('/model') ? 'http://localhost:8001' : e.path.startsWith('/ingest') ? 'http://localhost:8000' : base || 'http://localhost:8080';
+  return e.body ? `curl -X ${e.m} ${host}${e.path} \\\n  -H 'Content-Type: application/json' \\\n  -d '${e.body.replace(/\n\s*/g, ' ')}'` : `curl ${host}${e.path}`;
+};
 
-  const copy = async (text, id) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(''), 1200);
+export default function ApiDocs() {
+  const { settings } = useLive();
+  const [sel, setSel] = useState(ENDPOINTS[0].items[0]);
+  const [copied, setCopied] = useState(false);
+  const [tryRes, setTryRes] = useState(null);
+
+  const tryIt = async () => {
+    if (!settings.apiUrl) {
+      setTryRes({ err: 'Set a backend URL in Settings → Data source first.' });
+      return;
+    }
+    setTryRes({ loading: true });
+    try {
+      const t0 = performance.now();
+      const r = await fetch(settings.apiUrl.replace(/\/$/, '') + sel.path, { signal: AbortSignal.timeout(4000) });
+      const txt = await r.text();
+      setTryRes({ status: r.status, ms: performance.now() - t0, body: txt.slice(0, 4000) });
+    } catch (e) {
+      setTryRes({ err: e.message });
+    }
   };
 
   return (
     <section className="page">
-      <div className="container doc-layout">
-        <aside className="doc-sidebar">
-          <h3>Endpoints</h3>
-          {endpoints.map((endpoint) => (
-            <button
-              className={`doc-link ${active === endpoint.id ? 'active' : ''}`}
-              key={endpoint.id}
-              type="button"
-              onClick={() => setActive(endpoint.id)}
-            >
-              <span><span className={`method-pill ${endpoint.method.toLowerCase()}`}>{endpoint.method}</span> {endpoint.path}</span>
-              <ChevronRight size={15} />
-            </button>
-          ))}
-          <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-            <h3 style={{ marginBottom: 10 }}>Platform</h3>
-            {[
-              ['/dashboard', 'Live dashboard', Activity],
-              ['/console', 'Open CLI console', Terminal],
-              ['/features', 'Feature list', Zap],
-              ['/workflow', 'Workflow guide', ArrowRight],
-              ['/security', 'Security posture', ShieldCheck],
-              ['/settings', 'Keys & webhooks', KeyRound],
-            ].map(([to, label, Icon]) => (
-              <Link
-                key={to}
-                to={to}
-                className="doc-link"
-                style={{ textDecoration: 'none' }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <Icon size={13} /> {label}
-                </span>
-                <ChevronRight size={15} />
-              </Link>
+      <div className="wrap">
+        <PageHead
+          index="09"
+          kicker="api reference"
+          title={
+            <>
+              Three services, <em>ten endpoints</em>
+            </>
+          }
+        >
+          All APIs are FastAPI with OpenAPI at <span className="mono">/docs</span>. Authenticate with <span className="mono">X-API-Key</span> when{' '}
+          <span className="mono">API_KEY_ENABLED=true</span>.
+        </PageHead>
+        <div className="set-layout api-layout">
+          <div className="panel">
+            {ENDPOINTS.map((g) => (
+              <div key={g.group}>
+                <div className="label" style={{ padding: '14px 16px 6px' }}>
+                  {g.group}
+                </div>
+                {g.items.map((e) => (
+                  <button
+                    key={e.m + e.path}
+                    className={`inc-item ${sel === e ? 'sel' : ''}`}
+                    style={{ gridTemplateColumns: '48px 1fr', padding: '9px 16px' }}
+                    onClick={() => {
+                      setSel(e);
+                      setTryRes(null);
+                    }}
+                  >
+                    <span className={`method ${e.m}`}>{e.m}</span>
+                    <span className="mono" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {e.path.split('?')[0]}
+                    </span>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
-        </aside>
-
-        <div className="doc-content">
-          <motion.header
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="page-header"
-            style={{ textAlign: 'left', marginInline: 0 }}
-          >
-            <p className="eyebrow">API Docs</p>
-            <h1>Integrate LogSentinel with your services.</h1>
-            <p>
-              These endpoints cover ingestion, batch submission, health checks,
-              metrics, log retrieval, and anomaly scoring for the local platform.
-            </p>
-          </motion.header>
-
-          <motion.article
-            key={active + '-req'}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="doc-card panel"
-          >
-            <div className="endpoint-line">
-              <div>
-                <span className={`method-pill ${activeEndpoint.method.toLowerCase()}`}>{activeEndpoint.method}</span>
-                <code> {activeEndpoint.path}</code>
+          <div className="panel ticks">
+            <div className="panel-head">
+              <h3>
+                <span className={`method ${sel.m}`}>{sel.m}</span>
+                <span className="mono">{sel.path}</span>
+              </h3>
+              <div className="row">
+                {sel.tryable && (
+                  <button className="btn sm" onClick={tryIt}>
+                    <Play size={11} /> try it
+                  </button>
+                )}
+                <button
+                  className="btn sm"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(curl(sel, settings.apiUrl));
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1200);
+                  }}
+                >
+                  <Copy size={11} /> {copied ? 'copied' : 'curl'}
+                </button>
               </div>
-              <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.request, `${active}-request`)}>
-                {copied === `${active}-request` ? <Check size={17} /> : <Copy size={17} />}
-              </button>
             </div>
-            <h3>{activeEndpoint.title}</h3>
-            <p>{activeEndpoint.body}</p>
-            <pre className="code-block">{activeEndpoint.request}</pre>
-          </motion.article>
-
-          <motion.article
-            key={active + '-resp'}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 }}
-            className="doc-card panel"
-          >
-            <div className="endpoint-line">
-              <h3>Example response</h3>
-              <button className="icon-button" type="button" onClick={() => copy(activeEndpoint.response, `${active}-response`)}>
-                {copied === `${active}-response` ? <Check size={17} /> : <Copy size={17} />}
-              </button>
+            <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 18 }}>
+              <p style={{ margin: 0 }}>{sel.desc}</p>
+              <div>
+                <div className="label" style={{ marginBottom: 8 }}>
+                  request
+                </div>
+                <pre className="code">{curl(sel, settings.apiUrl)}</pre>
+              </div>
+              {sel.body && (
+                <div>
+                  <div className="label" style={{ marginBottom: 8 }}>
+                    body
+                  </div>
+                  <pre className="code">{sel.body}</pre>
+                </div>
+              )}
+              <div>
+                <div className="label" style={{ marginBottom: 8 }}>
+                  response · 200
+                </div>
+                <pre className="code">{sel.res}</pre>
+              </div>
+              {tryRes && (
+                <div>
+                  <div className="label" style={{ marginBottom: 8 }}>
+                    live response {tryRes.status ? `· ${tryRes.status} · ${tryRes.ms.toFixed(0)}ms` : ''}
+                  </div>
+                  <pre className="code" style={{ color: tryRes.err ? 'var(--signal)' : undefined }}>
+                    {tryRes.loading ? 'requesting…' : tryRes.err || tryRes.body}
+                  </pre>
+                </div>
+              )}
             </div>
-            <pre className="code-block">{activeEndpoint.response}</pre>
-          </motion.article>
-
-          <div className="feature-grid">
-            <article className="feature-card">
-              <span className="icon-box"><KeyRound size={23} /></span>
-              <h3>Authentication</h3>
-              <p>Send `X-API-KEY` with every request. Use separate keys per service so ingestion can be audited and revoked safely.</p>
-              <Link to="/settings" className="learn-more">Create API keys <ArrowRight size={14} /></Link>
-            </article>
-            <article className="feature-card">
-              <span className="icon-box"><Zap size={23} /></span>
-              <h3>Throughput</h3>
-              <p>Use `/ingest/batch` for workers that emit many logs per second. Keep batches small enough to retry safely.</p>
-              <Link to="/workflow" className="learn-more">See ingestion flow <ArrowRight size={14} /></Link>
-            </article>
-            <article className="feature-card">
-              <span className="icon-box"><ShieldCheck size={23} /></span>
-              <h3>Validation</h3>
-              <p>Unknown fields are preserved as metadata, while service, level, message, host, and timestamp stay normalized.</p>
-              <Link to="/security" className="learn-more">Security controls <ArrowRight size={14} /></Link>
-            </article>
           </div>
         </div>
       </div>
     </section>
   );
-};
-
-export default ApiDocs;
+}
