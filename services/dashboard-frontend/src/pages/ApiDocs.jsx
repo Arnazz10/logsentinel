@@ -52,7 +52,7 @@ const ENDPOINTS = [
     ],
   },
   {
-    group: 'dashboard-backend · :8080',
+    group: 'dashboard-backend · :8002',
     items: [
       { m: 'GET', path: '/logs?size=20&level=ERROR&service=auth-api&q=timeout', desc: 'Paginated Elasticsearch query with filters and full-text search.', res: `{ "page": 1, "size": 20, "total": 812, "items": [ … ] }`, tryable: true },
       { m: 'GET', path: '/anomalies?size=20', desc: 'Alerts persisted by alert-service in PostgreSQL.', res: `{ "page": 1, "total": 37, "items": [ … ] }`, tryable: true },
@@ -63,7 +63,7 @@ const ENDPOINTS = [
 ];
 
 const curl = (e, base) => {
-  const host = e.path.startsWith('/predict') || e.path.startsWith('/model') ? 'http://localhost:8001' : e.path.startsWith('/ingest') ? 'http://localhost:8000' : base || 'http://localhost:8080';
+  const host = e.path.startsWith('/predict') || e.path.startsWith('/model') ? 'http://localhost:8001' : e.path.startsWith('/ingest') ? 'http://localhost:8000' : base || 'http://localhost:8002';
   return e.body ? `curl -X ${e.m} ${host}${e.path} \\\n  -H 'Content-Type: application/json' \\\n  -d '${e.body.replace(/\n\s*/g, ' ')}'` : `curl ${host}${e.path}`;
 };
 

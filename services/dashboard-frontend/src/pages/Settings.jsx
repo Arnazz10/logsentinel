@@ -130,8 +130,8 @@ export default function Settings() {
             )}
             {tab === 'source' && (
               <>
-                <Row title="Backend URL" desc="Point at a running dashboard-backend (e.g. http://localhost:8080). Leave empty to use the in-browser simulator.">
-                  <input className="field" style={{ width: 260 }} placeholder="http://localhost:8080" value={url} onChange={(e) => setUrl(e.target.value)} />
+                <Row title="Backend URL" desc="Point at a running dashboard-backend (e.g. http://localhost:8002). Leave empty to use the in-browser simulator.">
+                  <input className="field" style={{ width: 260 }} placeholder="http://localhost:8002" value={url} onChange={(e) => setUrl(e.target.value)} />
                 </Row>
                 <Row title="Connection" desc={live.connection.detail}>
                   <button className="btn sm" onClick={testConn}>
